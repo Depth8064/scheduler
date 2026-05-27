@@ -1,0 +1,1618 @@
+openapi: 3.0.3
+info:
+  title: Scheduler API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  /auth/login:
+    post:
+      summary: Login with local account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '204':
+          description: Logged in
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      summary: Logout current session
+      responses:
+        '204':
+          description: Logged out
+
+  /auth/me:
+    get:
+      summary: Get current user info and permissions
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                  username:
+                    type: string
+                  role:
+                    type: string
+                    enum: [admin, workstation]
+                  assigned_workstation_ids:
+                    type: array
+                    items:
+                      type: string
+                    description: Empty for admin users (who can access all workstations)
+        '401':
+          description: Not authenticated
+
+  # ── Workstation Management (admin) ──────────────────────────────────────────
+
+  /admin/workstations:
+    get:
+      summary: List all workstations, grouped by station_type
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of workstations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    station_type:
+                      type: string
+                    active:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date-time
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a workstation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, station_type]
+              properties:
+                name:
+                  type: string
+                  example: "Burner 1"
+                station_type:
+                  type: string
+                  example: "Burner"
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Forbidden
+
+  /admin/workstations/{workstationId}:
+    get:
+      summary: Get a single workstation by ID
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workstation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  station_type:
+                    type: string
+                  active:
+                    type: boolean
+                  created_at:
+                    type: string
+                    format: date-time
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    patch:
+      summary: Update workstation name or active status
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  station_type:
+                    type: string
+                  active:
+                    type: boolean
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /admin/workstations/{workstationId}/users:
+    get:
+      summary: List users assigned to a workstation
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User list
+        '403':
+          description: Forbidden
+    put:
+      summary: Replace the full list of users assigned to a workstation
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_ids]
+              properties:
+                user_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Assignments updated
+        '403':
+          description: Forbidden
+
+  # ── User Management (admin) ──────────────────────────────────────────────────
+
+  /admin/users:
+    get:
+      summary: List all app users
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    username:
+                      type: string
+                    role:
+                      type: string
+                      enum: [admin, workstation]
+                    active:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date-time
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a new user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, workstation]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+                  role:
+                    type: string
+                    enum: [admin, workstation]
+                  active:
+                    type: boolean
+                  created_at:
+                    type: string
+                    format: date-time
+        '403':
+          description: Forbidden
+        '422':
+          description: Username already taken
+
+  /admin/users/{userId}:
+    patch:
+      summary: Update user role or active status
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [admin, workstation]
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    delete:
+      summary: Delete a user account
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  # ── Kanban Items (admin) ─────────────────────────────────────────────────────
+
+  /admin/kanban-items:
+    get:
+      summary: List all kanban reference items
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Kanban items list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    part_number:
+                      type: string
+                    part_description:
+                      type: string
+                    units_per_assembly:
+                      type: integer
+                    monthly_qty:
+                      type: integer
+                    weekly_qty:
+                      type: integer
+                    bin_qty:
+                      type: integer
+                    total_bins:
+                      type: integer
+                    total_kanban_qty:
+                      type: integer
+                    bin_type_notes:
+                      type: string
+                    dedicated_workstation_id:
+                      type: string
+                      nullable: true
+        '403':
+          description: Forbidden
+    post:
+      summary: Import kanban items from CSV
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '202':
+          description: Import accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  import_id:
+                    type: string
+        '403':
+          description: Forbidden
+        '422':
+          description: CSV parsing error
+
+  /admin/kanban-items/{partNumber}:
+    patch:
+      summary: Update a kanban item
+      parameters:
+        - in: path
+          name: partNumber
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                part_description:
+                  type: string
+                units_per_assembly:
+                  type: integer
+                monthly_qty:
+                  type: integer
+                weekly_qty:
+                  type: integer
+                bin_qty:
+                  type: integer
+                total_bins:
+                  type: integer
+                dedicated_workstation_id:
+                  type: string
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  # ── Work Center Mappings (admin) ─────────────────────────────────────────────
+
+  /admin/work-center-mappings:
+    get:
+      summary: List JobBOSS work center to workstation mappings
+      responses:
+        '200':
+          description: Mappings list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    jobboss_work_center_id:
+                      type: string
+                    jobboss_work_center_name:
+                      type: string
+                    workstation_id:
+                      type: string
+                    workstation_name:
+                      type: string
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a work center mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobboss_work_center_id, workstation_id]
+              properties:
+                jobboss_work_center_id:
+                  type: string
+                workstation_id:
+                  type: string
+      responses:
+        '201':
+          description: Created
+        '403':
+          description: Forbidden
+        '409':
+          description: Mapping already exists
+
+  /admin/work-center-mappings/{jobbossWorkCenterId}:
+    patch:
+      summary: Update a work center mapping
+      parameters:
+        - in: path
+          name: jobbossWorkCenterId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workstation_id:
+                  type: string
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    delete:
+      summary: Delete a work center mapping
+      parameters:
+        - in: path
+          name: jobbossWorkCenterId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  # ── Schedule Board (admin) ───────────────────────────────────────────────────
+
+  /admin/schedule-items:
+    get:
+      summary: List schedule items with optional filters
+      parameters:
+        - in: query
+          name: station_type
+          schema:
+            type: string
+        - in: query
+          name: workstation_id
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [unreleased, released, queued, in_progress, paused, blocked, completed]
+        - in: query
+          name: job_type
+          schema:
+            type: string
+            enum: [OPEN, KAN_BAN]
+        - in: query
+          name: job_group
+          schema:
+            type: string
+        - in: query
+          name: unassigned
+          schema:
+            type: boolean
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            enum: [created_at, target_date, priority, sort_order]
+            default: sort_order
+        - in: query
+          name: sort_order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: List of schedule items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    workstation_id:
+                      type: string
+                      nullable: true
+                    status:
+                      type: string
+                    job_type:
+                      type: string
+                    external_job_number:
+                      type: string
+                    part_number:
+                      type: string
+                    part_description:
+                      type: string
+                    material_spec:
+                      type: string
+                    target_date:
+                      type: string
+                      format: date
+                    priority:
+                      type: integer
+                    job_group:
+                      type: string
+                    planner_notes:
+                      type: string
+                    sort_order:
+                      type: integer
+                      nullable: true
+                    version:
+                      type: integer
+        '403':
+          description: Forbidden
+
+  /admin/schedule-items/{itemId}:
+    get:
+      summary: Get a single schedule item by ID
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule item
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  workstation_id:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                  job_type:
+                    type: string
+                  external_job_number:
+                    type: string
+                  part_number:
+                    type: string
+                  part_description:
+                    type: string
+                  material_spec:
+                    type: string
+                  planned_start_date:
+                    type: string
+                    format: date
+                  required_date:
+                    type: string
+                    format: date
+                  target_date:
+                    type: string
+                    format: date
+                  priority:
+                    type: integer
+                  job_group:
+                    type: string
+                  planner_notes:
+                    type: string
+                  sort_order:
+                    type: integer
+                    nullable: true
+                  version:
+                    type: integer
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+    patch:
+      summary: Update editable fields on a schedule item
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                target_date:
+                  type: string
+                  format: date
+                priority:
+                  type: integer
+                job_group:
+                  type: string
+                planner_notes:
+                  type: string
+      responses:
+        '200':
+          description: Updated
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict
+
+  /admin/schedule-items/{itemId}/assign:
+    post:
+      summary: Assign or reassign item to a specific workstation
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workstation_id, version]
+              properties:
+                workstation_id:
+                  type: string
+                version:
+                  type: integer
+      responses:
+        '200':
+          description: Assigned
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict
+        '422':
+          description: Workstation is disabled
+
+  /admin/schedule-items/{itemId}/unassign:
+    post:
+      summary: Remove workstation assignment; status returns to released
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+      responses:
+        '200':
+          description: Unassigned
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict
+
+  /admin/schedule-items/{itemId}/requeue:
+    post:
+      summary: Re-open a completed item and return it to queued state
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Requeued
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict
+        '422':
+          description: Item is not in completed state
+
+  /admin/schedule-items/bulk-release:
+    post:
+      summary: Release multiple items at once; optionally assign to a workstation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_ids]
+              properties:
+                item_ids:
+                  type: array
+                  items:
+                    type: string
+                workstation_id:
+                  type: string
+                  description: If provided, items are also assigned to this workstation in the same operation.
+      responses:
+        '200':
+          description: Bulk operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        item_id:
+                          type: string
+                        success:
+                          type: boolean
+                        status:
+                          type: string
+                          description: New status if success, or error reason if not
+        '403':
+          description: Forbidden
+        '422':
+          description: Workstation is disabled
+
+  /admin/schedule-items/{itemId}/release:
+    post:
+      summary: Release item from unreleased to released status
+      description: Transition unreleased → released. Item becomes visible to admin in the released (unassigned) queue but not to workstation users. To assign to a workstation, call /assign separately.
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+      responses:
+        '200':
+          description: Released
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict or invalid state transition
+        '422':
+          description: Item is not in unreleased status
+
+  /admin/schedule-items/{itemId}/unblock:
+    post:
+      summary: Clear a blocked status and return item to queued
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: integer
+      responses:
+        '200':
+          description: Unblocked
+        '403':
+          description: Forbidden
+        '409':
+          description: Version conflict
+
+  /admin/workstations/{workstationId}/queue/reorder:
+    put:
+      summary: Reorder the queue for a workstation
+      description: Atomically reorder all items in a workstation queue. The version field prevents concurrent edit conflicts.
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ordered_item_ids, version]
+              properties:
+                ordered_item_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Item IDs in desired sort order. Must match current queue exactly.
+                version:
+                  type: integer
+                  description: Queue version from GET /workstations/{id}/queue response. Increments on every mutation.
+      responses:
+        '200':
+          description: Queue reordered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: integer
+        '403':
+          description: Forbidden
+        '409':
+          description: Queue version conflict — stale version or item not in queue. Reload and retry.
+
+  # ── JobBOSS Sync (admin) ─────────────────────────────────────────────────────
+
+  /admin/sync:
+    post:
+      summary: Trigger JobBOSS sync
+      description: Starts an async sync run. Returns immediately with a run ID. If a sync is already in progress, returns 409.
+      responses:
+        '202':
+          description: Sync accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sync_run_id:
+                    type: string
+                  started_at:
+                    type: string
+                    format: date-time
+        '403':
+          description: Forbidden
+        '409':
+          description: Sync already in progress. Check /admin/sync/runs for status.
+
+  /admin/sync/runs:
+    get:
+      summary: List sync run history
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Sync run list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    sync_run_id:
+                      type: string
+                    status:
+                      type: string
+                      enum: [running, completed, failed]
+                    started_at:
+                      type: string
+                      format: date-time
+                    completed_at:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    po_lines_synced:
+                      type: integer
+                    po_lines_created:
+                      type: integer
+                    po_lines_updated:
+                      type: integer
+                    error_summary:
+                      type: string
+                      nullable: true
+        '403':
+          description: Forbidden
+
+  # ── Workstation Queue (operator) ─────────────────────────────────────────────
+
+  /workstations/{workstationId}/queue:
+    get:
+      summary: Get workstation queue ordered by sort_order and priority
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Queue returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workstation_id:
+                    type: string
+                  queue_version:
+                    type: integer
+                    description: Increment this in reorder requests. Prevents concurrent edit conflicts.
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        status:
+                          type: string
+                        job_type:
+                          type: string
+                        external_job_number:
+                          type: string
+                        part_number:
+                          type: string
+                        part_description:
+                          type: string
+                        material_spec:
+                          type: string
+                        target_date:
+                          type: string
+                          format: date
+                        priority:
+                          type: integer
+                        sort_order:
+                          type: integer
+        '403':
+          description: Forbidden
+        '404':
+          description: Workstation not found
+
+  /workstations/{workstationId}/items/{itemId}/start:
+    post:
+      summary: Start a queued item (queued -> in_progress)
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Started
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state transition
+
+  /workstations/{workstationId}/items/{itemId}/pause:
+    post:
+      summary: Pause an in-progress item
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paused
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state transition
+
+  /workstations/{workstationId}/items/{itemId}/resume:
+    post:
+      summary: Resume a paused item
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resumed
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state transition
+
+  /workstations/{workstationId}/items/{itemId}/block:
+    post:
+      summary: Mark an item as blocked (in_progress or paused) with a reason
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Blocked
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state (must be in_progress or paused)
+
+  /workstations/{workstationId}/items/{itemId}/progress:
+    post:
+      summary: Record a partial quantity update (does not close item)
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qty_complete, qty_remaining]
+              properties:
+                qty_complete:
+                  type: integer
+                qty_remaining:
+                  type: integer
+                scrap_delta:
+                  type: integer
+      responses:
+        '200':
+          description: Progress recorded
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state (must be in_progress or paused)
+        '422':
+          description: qty_complete exceeds qty_required
+
+  /workstations/{workstationId}/items/{itemId}/complete:
+    post:
+      summary: Close an item as complete with final qty (final state: completed)
+      description: Marks item status as completed. If qty_remaining > 0, indicates partial completion and requires partial_acknowledged=true.
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qty_complete]
+              properties:
+                qty_complete:
+                  type: integer
+                qty_remaining:
+                  type: integer
+                  description: If > 0, partial completion; caller must acknowledge.
+                scrap_delta:
+                  type: integer
+                partial_acknowledged:
+                  type: boolean
+      responses:
+        '200':
+          description: Completed
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state transition
+        '422':
+          description: qty_remaining > 0 but partial_acknowledged not set
+
+  /workstations/{workstationId}/items/{itemId}/send-next:
+    post:
+      summary: Record that item was sent to the next operation (metadata event)
+      description: Can be called from in_progress, paused, or completed status. Records a sent_next event.
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                destination_note:
+                  type: string
+                  example: "Press area"
+      responses:
+        '200':
+          description: Event recorded
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state (must be in_progress, paused, or completed)
+
+  /workstations/{workstationId}/items/{itemId}/metal-finishing:
+    post:
+      summary: Record metal finishing handoff date (metadata event)
+      description: Can be called from in_progress, paused, or completed status. Records a metal_finishing event.
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event recorded
+        '403':
+          description: Forbidden or item not assigned to this workstation
+        '404':
+          description: Workstation or item not found
+        '409':
+          description: Invalid state (must be in_progress, paused, or completed)
+
+  # ── Event History ────────────────────────────────────────────────────────────
+
+  /admin/schedule-items/{itemId}/events:
+    get:
+      summary: Get the full execution event timeline for a schedule item
+      parameters:
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of execution_events ordered by occurred_at ascending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    event_id:
+                      type: string
+                    event_type:
+                      type: string
+                    actor_id:
+                      type: string
+                    occurred_at:
+                      type: string
+                      format: date-time
+                    notes:
+                      type: string
+                      nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /workstations/{workstationId}/items/{itemId}/events:
+    get:
+      summary: Get execution event timeline (workstation-scoped view)
+      parameters:
+        - in: path
+          name: workstationId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of execution_events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    event_id:
+                      type: string
+                    event_type:
+                      type: string
+                    actor_id:
+                      type: string
+                    occurred_at:
+                      type: string
+                      format: date-time
+                    notes:
+                      type: string
+                      nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  # ── PO Line Inbox (admin) ────────────────────────────────────────────────────
+
+  /admin/po-lines:
+    get:
+      summary: List synced PO lines not yet promoted to schedule items
+      parameters:
+        - in: query
+          name: work_center
+          schema:
+            type: string
+        - in: query
+          name: inactive
+          schema:
+            type: boolean
+          description: If true, include lines soft-marked inactive (potentially cancelled)
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: PO line list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    po_line_id:
+                      type: string
+                    po_number:
+                      type: string
+                    po_line_number:
+                      type: integer
+                    work_center_id:
+                      type: string
+                    part_number:
+                      type: string
+                    part_description:
+                      type: string
+                    qty_ordered:
+                      type: integer
+                    required_date:
+                      type: string
+                      format: date
+                    inactive:
+                      type: boolean
+                    has_schedule_item:
+                      type: boolean
+        '403':
+          description: Forbidden
+
+  /admin/po-lines/{poLineId}/promote:
+    post:
+      summary: Promote a PO line to a schedule item in unreleased state
+      parameters:
+        - in: path
+          name: poLineId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workstation_id:
+                  type: string
+                  description: If provided, item is created in queued state directly.
+                planner_notes:
+                  type: string
+      responses:
+        '201':
+          description: Schedule item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedule_item_id:
+                    type: string
+                  status:
+                    type: string
+                    description: "unreleased if workstation_id not provided, queued if provided"
+        '403':
+          description: Forbidden
+        '404':
+          description: PO line not found
+        '409':
+          description: PO line already has a schedule item
+        '422':
+          description: Workstation not found or disabled
+
+  /admin/po-lines/{poLineId}/dismiss-alert:
+    post:
+      summary: Dismiss an inactive/cancelled PO line alert
+      description: Marks an inactive PO line as acknowledged so it no longer surfaces in the inbox. Does not delete the line.
+      parameters:
+        - in: path
+          name: poLineId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Dismissed
+        '403':
+          description: Forbidden
+        '404':
+          description: PO line not found
+        '403':
+          description: Forbidden
+
+  /admin/po-lines/{poLineId}/promote:
+    post:
+      summary: Promote a PO line to a schedule item in unreleased state
+      parameters:
+        - in: path
+          name: poLineId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workstation_id:
+                  type: string
+                  description: If provided, item is created in queued state directly.
+                planner_notes:
+                  type: string
+      responses:
+        '201':
+          description: Schedule item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedule_item_id:
+                    type: string
+                  status:
+                    type: string
+                    description: "unreleased if workstation_id not provided, queued if provided"
+        '403':
+          description: Forbidden
+        '404':
+          description: PO line not found
+        '409':
+          description: PO line already has a schedule item
+        '422':
+          description: Workstation not found or disabled

@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../go-jobboss2-api"
+		},
+		{
+			"path": "../Aribra to JobBOSS Connector"
+		},
+		{
+			"path": "../../Personal/printmaster"
+		}
+	],
+	"settings": {
+		"makefile.configureOnOpen": false
+	}
+}

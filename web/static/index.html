@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scheduler</title>
+  <style>
+    :root {
+      --bg: #f6f6f3;
+      --panel: #ffffff;
+      --ink: #222222;
+      --accent: #0b6a88;
+      --border: #d7d7d2;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: linear-gradient(160deg, #ece9e3 0%, #f8f8f6 100%);
+      color: var(--ink);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(720px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      color: var(--accent);
+      letter-spacing: 0.3px;
+    }
+
+    code {
+      background: #f2f5f7;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Scheduler Bootstrap</h1>
+    <p>Canonical docs and backend foundation are now in place.</p>
+    <p>Health endpoint: <code>/healthz</code></p>
+    <p>Next implementation targets:</p>
+    <ol>
+      <li>Auth and workstation role scoping</li>
+      <li>JobBOSS read-only sync service</li>
+      <li>Admin and workstation API flows</li>
+    </ol>
+  </main>
+</body>
+</html>

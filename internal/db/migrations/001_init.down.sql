@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS sync_runs;
+DROP TABLE IF EXISTS sync_checkpoints;
+DROP TABLE IF EXISTS kanban_items;
+DROP TABLE IF EXISTS execution_events;
+DROP TABLE IF EXISTS execution_progress;
+DROP TABLE IF EXISTS schedule_items;
+DROP TABLE IF EXISTS jobboss_po_lines;
+DROP TABLE IF EXISTS user_workstation_access;
+DROP TABLE IF EXISTS workstations;
+DROP TABLE IF EXISTS users;

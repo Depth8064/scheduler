@@ -62,7 +62,8 @@ jobs:
       - name: Determine container tags
         id: tags
         run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER}/scheduler" >> $GITHUB_OUTPUT
+          owner_lowercase="${GITHUB_REPOSITORY_OWNER,,}"   # ,,  → lowercase all chars
+          echo "IMAGE=ghcr.io/${owner_lowercase}/scheduler" >> "$GITHUB_OUTPUT"
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             echo "TAGS=main" >> $GITHUB_OUTPUT
           else

@@ -119,7 +119,7 @@ CREATE INDEX IF NOT EXISTS idx_schedule_items_workstation_sort_order
     ON schedule_items(workstation_id, sort_order);
 
 CREATE INDEX IF NOT EXISTS idx_schedule_items_state
-    ON schedule_items(state);
+    ON schedule_items(status);
 
 CREATE INDEX IF NOT EXISTS idx_execution_events_schedule_item
     ON execution_events(schedule_item_id, occurred_at);

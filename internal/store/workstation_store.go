@@ -35,13 +35,14 @@ func (s *WorkstationStore) GetByID(ctx context.Context, id string) (*Workstation
 	return s.getOne(ctx, `WHERE id = $1`, id)
 }
 
-// List returns all workstations ordered by station_type then name.
-func (s *WorkstationStore) List(ctx context.Context) ([]Workstation, error) {
+// List returns workstations ordered by station_type then name with pagination.
+func (s *WorkstationStore) List(ctx context.Context, limit, offset int) ([]Workstation, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, station_type, is_active, created_at, updated_at
 		FROM workstations
 		ORDER BY station_type, name
-	`)
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list workstations: %w", err)
 	}

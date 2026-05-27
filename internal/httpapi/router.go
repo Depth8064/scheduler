@@ -22,13 +22,13 @@ func NewRouter(logger *logging.Manager, authManager *auth.Manager, repositories 
 		})
 	})
 
-	authHandlers := newAuthHandler(authManager)
+	authHandlers := newAuthHandler(authManager, repositories.Access)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandlers.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", authHandlers.handleLogout)
 	mux.HandleFunc("GET /api/v1/auth/me", authHandlers.handleMe)
 
 	adminUsers := newAdminUsersHandler(repositories.Users, authManager)
-	adminWorkstations := newAdminWorkstationsHandler(repositories.Workstations)
+	adminWorkstations := newAdminWorkstationsHandler(repositories.Workstations, repositories.Access)
 	mux.Handle("GET /api/v1/admin/users", requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminUsers.handleUsers)))
 	mux.Handle("POST /api/v1/admin/users", requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminUsers.handleUsers))))
 	mux.Handle("GET /api/v1/admin/users/", requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminUsers.handleUser)))
@@ -39,6 +39,7 @@ func NewRouter(logger *logging.Manager, authManager *auth.Manager, repositories 
 	mux.Handle("GET /api/v1/admin/workstations/", requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminWorkstations.handleWorkstation)))
 	mux.Handle("PATCH /api/v1/admin/workstations/", requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))))
 	mux.Handle("DELETE /api/v1/admin/workstations/", requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))))
+	mux.Handle("PUT /api/v1/admin/workstations/", requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))))
 
 	mux.Handle("/", staticHandler())
 

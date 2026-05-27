@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,7 +69,9 @@ func (h *adminUsersHandler) handleGetByID(w http.ResponseWriter, r *http.Request
 }
 
 func (h *adminUsersHandler) handleList(w http.ResponseWriter, r *http.Request) {
-	users, err := h.users.List(r.Context())
+	limit, offset := parseLimitOffset(r)
+
+	users, err := h.users.List(r.Context(), limit, offset)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "failed to list users")
 		return
@@ -146,10 +149,8 @@ func (h *adminUsersHandler) handleCreate(w http.ResponseWriter, r *http.Request)
 
 func (h *adminUsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
-		Username *string `json:"username"`
-		Role     *string `json:"role"`
-		Active   *bool   `json:"active"`
-		Password *string `json:"password"`
+		Role   *string `json:"role"`
+		Active *bool   `json:"active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request body")
@@ -160,26 +161,6 @@ func (h *adminUsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		jsonError(w, http.StatusNotFound, "user not found")
 		return
-	}
-
-	if req.Username != nil {
-		username := strings.TrimSpace(*req.Username)
-		if username == "" {
-			jsonError(w, http.StatusBadRequest, "username cannot be empty")
-			return
-		}
-		if username != user.Username {
-			exists, err := h.users.UsernameExists(r.Context(), username)
-			if err != nil {
-				jsonError(w, http.StatusInternalServerError, "failed to validate username")
-				return
-			}
-			if exists {
-				jsonError(w, http.StatusUnprocessableEntity, "username already exists")
-				return
-			}
-		}
-		user.Username = username
 	}
 
 	if req.Role != nil {
@@ -198,18 +179,6 @@ func (h *adminUsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request,
 	if err := h.users.Update(r.Context(), user); err != nil {
 		jsonError(w, http.StatusInternalServerError, "failed to update user")
 		return
-	}
-
-	if req.Password != nil && strings.TrimSpace(*req.Password) != "" {
-		hash, err := auth.HashPassword(*req.Password)
-		if err != nil {
-			jsonError(w, http.StatusInternalServerError, "failed to update password")
-			return
-		}
-		if err := h.users.UpdatePasswordHash(r.Context(), user.ID, hash); err != nil {
-			jsonError(w, http.StatusInternalServerError, "failed to update password")
-			return
-		}
 	}
 
 	updated, err := h.users.GetByID(r.Context(), user.ID)
@@ -249,4 +218,23 @@ func generateID(prefix string) string {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
 	return prefix + "_" + base64.RawURLEncoding.EncodeToString(raw[:])
+}
+
+func parseLimitOffset(r *http.Request) (int, int) {
+	limit := 50
+	offset := 0
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if o := r.URL.Query().Get("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	return limit, offset
 }

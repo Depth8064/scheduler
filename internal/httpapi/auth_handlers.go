@@ -6,14 +6,16 @@ import (
 	"net/http"
 
 	"scheduler/internal/auth"
+	"scheduler/internal/store"
 )
 
 type authHandler struct {
 	authManager *auth.Manager
+	access      *store.UserWorkstationAccessStore
 }
 
-func newAuthHandler(authManager *auth.Manager) *authHandler {
-	return &authHandler{authManager: authManager}
+func newAuthHandler(authManager *auth.Manager, access *store.UserWorkstationAccessStore) *authHandler {
+	return &authHandler{authManager: authManager, access: access}
 }
 
 func (h *authHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -92,12 +94,20 @@ func (h *authHandler) handleMe(w http.ResponseWriter, r *http.Request) {
 	// assigned_workstation_ids is populated for workstation-role users via
 	// user_workstation_access; admin users have access to all workstations.
 	assignedIDs := []string{}
+	if session.Role == store.RoleWorkstation {
+		ids, err := h.access.GetWorkstationIDsByUser(r.Context(), session.UserID)
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, "failed to load assigned workstations")
+			return
+		}
+		assignedIDs = ids
+	}
 
 	jsonResponse(w, http.StatusOK, map[string]any{
-		"user_id":                   session.UserID,
-		"username":                  session.Username,
-		"role":                      session.Role,
-		"assigned_workstation_ids":  assignedIDs,
+		"user_id":                  session.UserID,
+		"username":                 session.Username,
+		"role":                     session.Role,
+		"assigned_workstation_ids": assignedIDs,
 	})
 }
 

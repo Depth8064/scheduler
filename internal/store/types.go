@@ -11,6 +11,7 @@ type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
 }
 
 type UserRole string
@@ -142,18 +143,18 @@ type ExecutionEvent struct {
 
 // KanbanItem mirrors the kanban_items table.
 type KanbanItem struct {
-	PartNumber              string
-	PartDescription         *string
-	UnitsPerAssembly        int
-	MonthlyQty              int
-	WeeklyQty               int
-	BinQty                  int
-	TotalBins               int
-	TotalKanbanQty          int
-	BinTypeNotes            *string
-	DedicatedWorkstationID  *string
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
+	PartNumber             string
+	PartDescription        *string
+	UnitsPerAssembly       int
+	MonthlyQty             int
+	WeeklyQty              int
+	BinQty                 int
+	TotalBins              int
+	TotalKanbanQty         int
+	BinTypeNotes           *string
+	DedicatedWorkstationID *string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 // SyncCheckpoint mirrors the sync_checkpoints table.

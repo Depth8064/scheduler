@@ -41,13 +41,14 @@ func (s *UserStore) GetByUsername(ctx context.Context, username string) (*User, 
 	return s.getOne(ctx, `WHERE username = $1`, username)
 }
 
-// List returns all users ordered by username.
-func (s *UserStore) List(ctx context.Context) ([]User, error) {
+// List returns users ordered by username with pagination.
+func (s *UserStore) List(ctx context.Context, limit, offset int) ([]User, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, username, password_hash, role, is_active, created_at, updated_at
 		FROM users
 		ORDER BY username
-	`)
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}

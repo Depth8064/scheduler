@@ -13,10 +13,11 @@ import (
 
 type adminWorkstationsHandler struct {
 	workstations *store.WorkstationStore
+	access       *store.UserWorkstationAccessStore
 }
 
-func newAdminWorkstationsHandler(workstations *store.WorkstationStore) *adminWorkstationsHandler {
-	return &adminWorkstationsHandler{workstations: workstations}
+func newAdminWorkstationsHandler(workstations *store.WorkstationStore, access *store.UserWorkstationAccessStore) *adminWorkstationsHandler {
+	return &adminWorkstationsHandler{workstations: workstations, access: access}
 }
 
 func (h *adminWorkstationsHandler) handleWorkstations(w http.ResponseWriter, r *http.Request) {
@@ -31,26 +32,49 @@ func (h *adminWorkstationsHandler) handleWorkstations(w http.ResponseWriter, r *
 }
 
 func (h *adminWorkstationsHandler) handleWorkstation(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/workstations/")
-	if id == "" || strings.Contains(id, "/") {
+	pathSuffix := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/workstations/")
+	if pathSuffix == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	if strings.HasSuffix(pathSuffix, "/users") {
+		workstationID := strings.TrimSuffix(pathSuffix, "/users")
+		if workstationID == "" || strings.Contains(workstationID, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			h.handleListUsers(w, r, workstationID)
+		case http.MethodPut:
+			h.handleReplaceUsers(w, r, workstationID)
+		default:
+			methodNotAllowed(w)
+		}
+		return
+	}
+
+	if strings.Contains(pathSuffix, "/") {
 		http.NotFound(w, r)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		h.handleGetByID(w, r, id)
+		h.handleGetByID(w, r, pathSuffix)
 	case http.MethodPatch:
-		h.handleUpdate(w, r, id)
+		h.handleUpdate(w, r, pathSuffix)
 	case http.MethodDelete:
-		h.handleDelete(w, r, id)
+		h.handleDelete(w, r, pathSuffix)
 	default:
 		methodNotAllowed(w)
 	}
 }
 
 func (h *adminWorkstationsHandler) handleList(w http.ResponseWriter, r *http.Request) {
-	items, err := h.workstations.List(r.Context())
+	limit, offset := parseLimitOffset(r)
+	items, err := h.workstations.List(r.Context(), limit, offset)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "failed to list workstations")
 		return
@@ -120,9 +144,8 @@ func (h *adminWorkstationsHandler) handleCreate(w http.ResponseWriter, r *http.R
 
 func (h *adminWorkstationsHandler) handleUpdate(w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
-		Name        *string `json:"name"`
-		StationType *string `json:"station_type"`
-		Active      *bool   `json:"active"`
+		Name   *string `json:"name"`
+		Active *bool   `json:"active"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request body")
@@ -146,15 +169,6 @@ func (h *adminWorkstationsHandler) handleUpdate(w http.ResponseWriter, r *http.R
 			return
 		}
 		workstation.Name = name
-	}
-
-	if req.StationType != nil {
-		st := strings.TrimSpace(*req.StationType)
-		if st == "" {
-			jsonError(w, http.StatusBadRequest, "station_type cannot be empty")
-			return
-		}
-		workstation.StationType = st
 	}
 
 	if req.Active != nil {
@@ -188,6 +202,50 @@ func (h *adminWorkstationsHandler) handleDelete(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *adminWorkstationsHandler) handleListUsers(w http.ResponseWriter, r *http.Request, workstationID string) {
+	users, err := h.access.GetUsersByWorkstation(r.Context(), workstationID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to list workstation users")
+		return
+	}
+
+	response := make([]map[string]any, 0, len(users))
+	for _, user := range users {
+		response = append(response, map[string]any{
+			"id":         user.ID,
+			"username":   user.Username,
+			"role":       user.Role,
+			"active":     user.IsActive,
+			"created_at": user.CreatedAt,
+			"updated_at": user.UpdatedAt,
+		})
+	}
+
+	jsonResponse(w, http.StatusOK, response)
+}
+
+func (h *adminWorkstationsHandler) handleReplaceUsers(w http.ResponseWriter, r *http.Request, workstationID string) {
+	var req struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.UserIDs == nil {
+		jsonError(w, http.StatusBadRequest, "user_ids is required")
+		return
+	}
+
+	if err := h.access.ReplaceUsersForWorkstation(r.Context(), workstationID, req.UserIDs); err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to update workstation assignments")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]any{"updated": true})
+}
+
 func (h *adminWorkstationsHandler) workstationResponse(workstation store.Workstation) map[string]any {
 	return map[string]any{
 		"id":           workstation.ID,
@@ -198,4 +256,3 @@ func (h *adminWorkstationsHandler) workstationResponse(workstation store.Worksta
 		"updated_at":   workstation.UpdatedAt,
 	}
 }
-

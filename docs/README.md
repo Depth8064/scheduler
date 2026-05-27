@@ -28,3 +28,6 @@ This folder is the source of truth for product and implementation decisions.
 - [Runbooks](ops/runbooks.md)
 - [Testing Strategy](testing/strategy.md)
 - [V1 Roadmap](roadmap/v1-plan.md)
+
+Notes:
+- Scaffolding added in code for `schedule_items` store, execution store, worker skeleton, and CI. Expand these components to implement full behavior per the API docs.

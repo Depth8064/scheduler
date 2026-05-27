@@ -6,6 +6,7 @@ type Store struct {
 	Workstations *WorkstationStore
 	Sessions     *AuthStore
 	Access       *UserWorkstationAccessStore
+	Schedules    *ScheduleStore
 }
 
 // New constructs repository adapters over the supplied database handle.
@@ -15,5 +16,6 @@ func New(db DBTX) *Store {
 		Workstations: NewWorkstationStore(db),
 		Sessions:     NewAuthStore(db),
 		Access:       NewUserWorkstationAccessStore(db),
+		Schedules:    NewScheduleStore(db),
 	}
 }

@@ -71,6 +71,9 @@ function renderLoginForm() {
   hint.style.fontSize = '0.95rem';
   hint.textContent = 'Use the API login endpoint to sign in and unlock admin/workstation data.';
   authContent.appendChild(hint);
+
+  // Hide admin panels when logged out
+  showAdminPanels(null);
 }
 
 function renderUserInfo(user) {
@@ -90,6 +93,9 @@ function renderUserInfo(user) {
     await refreshAuth();
   });
   authContent.appendChild(btn);
+
+  // Show/hide admin panels based on role
+  showAdminPanels(user.role);
 }
 
 async function refreshAuth() {
@@ -207,8 +213,27 @@ async function loadUsers() {
 function initAdminPanel() {
   const btnW = document.getElementById('btn-load-workstations');
   const btnU = document.getElementById('btn-load-users');
+  const adminPanel = document.getElementById('admin-panel');
+  const usersPanel = document.getElementById('users-panel');
+
+  // Hide admin panels until user logs in as admin
+  if (adminPanel) adminPanel.style.display = 'none';
+  if (usersPanel) usersPanel.style.display = 'none';
+
   if (btnW) btnW.addEventListener('click', loadWorkstations);
   if (btnU) btnU.addEventListener('click', loadUsers);
+}
+
+function showAdminPanels(role) {
+  const adminPanel = document.getElementById('admin-panel');
+  const usersPanel = document.getElementById('users-panel');
+  if (role === 'admin') {
+    if (adminPanel) adminPanel.style.display = 'block';
+    if (usersPanel) usersPanel.style.display = 'block';
+  } else {
+    if (adminPanel) adminPanel.style.display = 'none';
+    if (usersPanel) usersPanel.style.display = 'none';
+  }
 }
 
 // Initialize

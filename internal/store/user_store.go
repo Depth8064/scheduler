@@ -218,6 +218,16 @@ func (s *UserStore) UsernameExists(ctx context.Context, username string) (bool, 
 	return count > 0, nil
 }
 
+// Exists reports whether any users exist in the database.
+func (s *UserStore) Exists(ctx context.Context) (bool, error) {
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check users exists: %w", err)
+	}
+
+	return exists, nil
+}
+
 func (s *UserStore) getOne(ctx context.Context, whereClause string, arg any) (*User, error) {
 	query := fmt.Sprintf(`
 		SELECT id, username, password_hash, role, is_active, created_at, updated_at

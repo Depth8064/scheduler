@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -78,6 +79,12 @@ func main() {
 	}
 
 	repositories := store.New(sqlDB)
+	if err := ensureDefaultAdmin(ctx, repositories.Users, logManager); err != nil {
+		fmt.Println("Failed to seed default admin user")
+		fmt.Printf("Error: %v\n", err)
+		logManager.Error("failed to seed default admin user", "error", err)
+		os.Exit(1)
+	}
 	authManager := auth.NewManager(repositories.Users, repositories.Sessions, cfg.SessionSecret)
 	authManager.SetSessionLifetime(8 * time.Hour)
 	handler := httpapi.NewRouter(logManager, authManager, repositories)
@@ -108,5 +115,65 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logManager.Error("graceful shutdown failed", "error", err)
 	}
+}
 
+func ensureDefaultAdmin(ctx context.Context, users *store.UserStore, logger *logging.Manager) error {
+	exists, err := users.Exists(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+
+	username := getEnvOrDefault("SCHEDULER_DEFAULT_ADMIN_USERNAME", "admin")
+	password := os.Getenv("SCHEDULER_DEFAULT_ADMIN_PASSWORD")
+	if password == "" {
+		password = "admin123"
+	}
+
+	logger.Info("seeding default admin user", "username", username)
+
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("hash default admin password: %w", err)
+	}
+
+	userID, err := newUUID()
+	if err != nil {
+		return fmt.Errorf("generate default admin id: %w", err)
+	}
+
+	now := time.Now().UTC()
+	if err := users.Create(ctx, &store.User{
+		ID:           userID,
+		Username:     username,
+		PasswordHash: hash,
+		Role:         store.RoleAdmin,
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		return fmt.Errorf("create default admin user: %w", err)
+	}
+
+	logger.Info("default admin user seeded", "username", username)
+	return nil
+}
+
+func getEnvOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func newUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }

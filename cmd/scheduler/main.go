@@ -23,42 +23,56 @@ import (
 )
 
 func main() {
+	fmt.Println("Loading configuration...")
 	cfg, err := config.FromEnv()
 	if err != nil {
 		panic(err)
 	}
 
+	fmt.Println("Starting scheduler...")
 	logManager := logging.GetManager()
 	logCfg := logging.DefaultConfig()
 	logCfg.DebugEnabled = cfg.Env == "development"
 	logCfg.VerboseEnabled = cfg.Env == "development"
 	logCfg.LogToStdout = true
-	logCfg.LogToFile = false
+	logCfg.LogToFile = true
 	logCfg.SyslogEnabled = false
 	logCfg.SyslogTag = "scheduler"
 	logCfg.FilePath = "./data/scheduler.log"
 
+	fmt.Println("Configuring logger...")
 	if err := logManager.Configure(logCfg); err != nil {
+		fmt.Println("Failed to configure logger")
+		fmt.Printf("Error: %v\n", err)
 		panic(fmt.Errorf("configure logger: %w", err))
 	}
 	defer logManager.Close()
 
+	fmt.Println("Connecting to database...")
 	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
+		fmt.Println("Failed to open database")
+		fmt.Printf("Error: %v\n", err)
 		logManager.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
+	fmt.Println("Checking database connection...")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	if err := sqlDB.PingContext(ctx); err != nil {
+		fmt.Println("Failed to connect to database")
+		fmt.Printf("Error: %v\n", err)
 		logManager.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 
+	fmt.Println("Running migrations...")
 	if err := db.RunMigrations(ctx, sqlDB); err != nil {
+		fmt.Println("Failed to run migrations")
+		fmt.Printf("Error: %v\n", err)
 		logManager.Error("failed to run migrations", "error", err)
 		os.Exit(1)
 	}
@@ -94,4 +108,5 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logManager.Error("graceful shutdown failed", "error", err)
 	}
+
 }

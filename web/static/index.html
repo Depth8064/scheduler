@@ -3,60 +3,382 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Scheduler</title>
+  <title>Scheduler Dashboard</title>
   <style>
     :root {
-      --bg: #f6f6f3;
-      --panel: #ffffff;
-      --ink: #222222;
-      --accent: #0b6a88;
-      --border: #d7d7d2;
+      --bg: #f4f7f9;
+      --surface: #ffffff;
+      --surface-strong: #f0f4f7;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --accent: #0f7383;
+      --accent-soft: #def2f5;
+      --border: #d1d5db;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
     }
 
     body {
       margin: 0;
-      font-family: "Segoe UI", Tahoma, sans-serif;
-      background: linear-gradient(160deg, #ece9e3 0%, #f8f8f6 100%);
-      color: var(--ink);
       min-height: 100vh;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(180deg, #eef2f6 0%, #f9fbfd 100%);
+      color: var(--ink);
+      padding: 24px;
+    }
+
+    .layout {
       display: grid;
-      place-items: center;
-      padding: 24px;
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      grid-template-columns: 1fr;
     }
 
-    .card {
-      width: min(720px, 100%);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    .hero {
+      display: grid;
+      gap: 18px;
+      padding: 32px;
+      border-radius: 22px;
+      background: radial-gradient(circle at top left, rgba(15, 115, 131, 0.14), transparent 40%), var(--surface);
+      border: 1px solid rgba(209, 213, 219, 0.7);
+      box-shadow: var(--shadow);
     }
 
-    h1 {
-      margin-top: 0;
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 2.8vw, 3.2rem);
       color: var(--accent);
-      letter-spacing: 0.3px;
     }
 
-    code {
-      background: #f2f5f7;
-      padding: 2px 6px;
-      border-radius: 6px;
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 60ch;
+      line-height: 1.7;
+    }
+
+    .grid-2 {
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .panel {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      padding: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+      letter-spacing: 0.02em;
+      color: var(--ink);
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+      border: 1px solid rgba(15, 115, 131, 0.16);
+    }
+
+    .status-chip.failure {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: rgba(185, 28, 28, 0.16);
+    }
+
+    .endpoint-list,
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .endpoint-list li,
+    .feature-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: var(--surface-strong);
+      border: 1px solid rgba(209, 213, 219, 0.8);
+      color: var(--ink);
+    }
+
+    .endpoint-list li span:first-child,
+    .feature-list li span:first-child {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .endpoint-list li code {
+      background: rgba(226, 232, 240, 0.9);
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+
+    .form-row {
+      display: grid;
+      gap: 16px;
+    }
+
+    label {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 1rem;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      outline: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #ffffff;
+      background: var(--accent);
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #0d5d69;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .notice {
+      padding: 16px;
+      border-radius: 14px;
+      background: #f8fafc;
+      border: 1px solid rgba(209, 213, 219, 0.8);
+      color: var(--muted);
+    }
+
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 16px;
+      background: #eff6ff;
+      border-radius: 14px;
+      border: 1px solid rgba(191, 219, 254, 0.75);
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .loading {
+      opacity: 0.35;
     }
   </style>
 </head>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scheduler Dashboard</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
 <body>
-  <main class="card">
-    <h1>Scheduler Bootstrap</h1>
-    <p>Canonical docs and backend foundation are now in place.</p>
-    <p>Health endpoint: <code>/healthz</code></p>
-    <p>Next implementation targets:</p>
-    <ol>
-      <li>Auth and workstation role scoping</li>
-      <li>JobBOSS read-only sync service</li>
-      <li>Admin and workstation API flows</li>
-    </ol>
-  </main>
+  <div class="layout">
+    <section class="hero panel">
+      <div>
+        <p class="status-chip" id="service-status">Loading scheduler status...</p>
+      </div>
+      <h1>Scheduler Dashboard</h1>
+      <p>Welcome to the product scheduling app. This page reflects the backend foundation: auth, health, and admin APIs.</p>
+      <div class="meta-row">
+        <span><strong>Current focus:</strong> auth, workstation scoping, JobBOSS sync, admin APIs.</span>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <section class="panel" id="auth-panel">
+        <h2>Authentication</h2>
+        <div id="auth-content">
+          <p class="notice">Loading authentication state...</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>System status</h2>
+        <p class="notice">The dashboard queries backend endpoints directly so you can see health and auth state immediately.</p>
+        <ul class="endpoint-list">
+          <li><span>Health check</span><code>/healthz</code></li>
+          <li><span>Login</span><code>/api/v1/auth/login</code></li>
+          <li><span>Current user</span><code>/api/v1/auth/me</code></li>
+          <li><span>Admin workstations</span><code>/api/v1/admin/workstations</code></li>
+          <li><span>Admin users</span><code>/api/v1/admin/users</code></li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="panel" id="admin-panel">
+      <h2>Admin</h2>
+      <div class="meta-row">
+        <button id="btn-load-workstations">Load workstations</button>
+        <button id="btn-load-users">Load users</button>
+      </div>
+      <div id="admin-results" style="margin-top:16px;">
+        <div id="workstations-list"></div>
+        <div id="users-list" style="margin-top:12px;"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>What’s built so far</h2>
+      <ul class="feature-list">
+        <li><span>Local authentication manager</span><strong>Complete</strong></li>
+        <li><span>Session cookie handling</span><strong>Complete</strong></li>
+        <li><span>Health probe endpoint</span><strong>Complete</strong></li>
+        <li><span>Admin user/workstation APIs</span><strong>Scaffolded</strong></li>
+        <li><span>Role-based access enforcement</span><strong>Scaffolded</strong></li>
+        <li><span>JobBOSS configuration support</span><strong>Ready</strong></li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Next UI additions</h2>
+      <p class="notice">Use this section to track the next work items for the user-facing dashboard.</p>
+      <pre>{
+  "next_steps": [
+    "Add workstation dashboard views",
+    "Show JobBOSS sync status and recent jobs",
+    "Build admin user/workstation management screens",
+    "Expose API docs and openapi preview"
+  ]
+}</pre>
+    </section>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
+          <div>
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+          <button type="submit">Sign in</button>
+        </form>
+        <p style="margin-top: 12px; color: var(--muted); font-size: 0.95rem;">Use the API login endpoint to sign in and unlock admin/workstation data.</p>
+      `;
+
+      document.getElementById('login-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const username = event.target.username.value.trim();
+        const password = event.target.password.value;
+        authContent.classList.add('loading');
+
+        try {
+          const response = await fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Login failed');
+          }
+
+          await refreshAuth();
+        } catch (error) {
+          authContent.innerHTML = `<p class="notice">Unable to sign in. Confirm backend credentials and retry.</p>`;
+          setTimeout(refreshAuth, 2000);
+        } finally {
+          authContent.classList.remove('loading');
+        }
+      });
+    }
+
+    function renderUserInfo(user) {
+      authContent.innerHTML = `
+        <div class="notice">
+          <p><strong>Signed in as:</strong> ${user.username}</p>
+          <p><strong>Role:</strong> ${user.role}</p>
+          <p><strong>Assigned workstations:</strong> ${user.assigned_workstation_ids.length ? user.assigned_workstation_ids.join(', ') : 'All'}</p>
+        </div>
+        <button id="logout-button">Sign out</button>
+      `;
+
+      document.getElementById('logout-button').addEventListener('click', async () => {
+        await fetch('/api/v1/auth/logout', { method: 'POST' });
+        refreshAuth();
+      });
+    }
+
+    async function refreshAuth() {
+      authContent.classList.add('loading');
+      try {
+        const response = await fetch('/api/v1/auth/me', { credentials: 'same-origin' });
+        if (response.ok) {
+          const user = await response.json();
+          renderUserInfo(user);
+        } else {
+          renderLoginForm();
+        }
+      } catch (error) {
+        authContent.innerHTML = `<p class="notice">Unable to reach auth API. Backend may not be running.</p>`;
+      } finally {
+        authContent.classList.remove('loading');
+      }
+    }
+
+    async function fetchHealth() {
+      try {
+        const response = await fetch('/healthz', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('unhealthy');
+        }
+
+        const payload = await response.json();
+        serviceStatus.textContent = `Online • ${payload.status} • ${new Date(payload.time).toLocaleTimeString()}`;
+        serviceStatus.classList.remove('failure');
+      } catch (error) {
+        serviceStatus.textContent = 'Offline • health check failed';
+        serviceStatus.classList.add('failure');
+      }
+    }
+
+    fetchHealth();
+    refreshAuth();
+    setInterval(fetchHealth, 30000);
+  </script>
 </body>
 </html>

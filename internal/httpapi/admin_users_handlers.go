@@ -3,9 +3,9 @@ package httpapi
 import (
 	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -131,7 +131,7 @@ func (h *adminUsersHandler) handleCreate(w http.ResponseWriter, r *http.Request)
 	}
 
 	user := &store.User{
-		ID:           generateID("user"),
+		ID:           generateID(),
 		Username:     req.Username,
 		PasswordHash: hash,
 		Role:         role,
@@ -214,10 +214,17 @@ func (h *adminUsersHandler) userResponse(user store.User) map[string]any {
 	}
 }
 
-func generateID(prefix string) string {
+func generateID() string {
 	var raw [16]byte
-	_, _ = rand.Read(raw[:])
-	return prefix + "_" + base64.RawURLEncoding.EncodeToString(raw[:])
+	if _, err := rand.Read(raw[:]); err != nil {
+		// Fallback is still a valid UUID shape; generation failures are exceptionally rare.
+		return "00000000-0000-4000-8000-000000000000"
+	}
+
+	raw[6] = (raw[6] & 0x0f) | 0x40
+	raw[8] = (raw[8] & 0x3f) | 0x80
+
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16])
 }
 
 func parseLimitOffset(r *http.Request) (int, int) {

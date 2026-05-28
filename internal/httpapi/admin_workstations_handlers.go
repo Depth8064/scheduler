@@ -127,7 +127,7 @@ func (h *adminWorkstationsHandler) handleCreate(w http.ResponseWriter, r *http.R
 
 	now := time.Now().UTC()
 	workstation := &store.Workstation{
-		ID:          generateID("workstation"),
+		ID:          generateID(),
 		Name:        req.Name,
 		StationType: req.StationType,
 		IsActive:    isActive,

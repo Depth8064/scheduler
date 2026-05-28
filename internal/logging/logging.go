@@ -438,7 +438,7 @@ func (m *Manager) Debugf(format string, v ...interface{}) {
 
 // LogRequest logs normalized HTTP request details.
 func (m *Manager) LogRequest(method, path, clientIP, userAgent, remoteAddr string, status int, duration time.Duration) {
-	m.Info("HTTP request completed",
+	m.Debug("HTTP request completed",
 		"category", "http.request",
 		"method", method,
 		"path", path,

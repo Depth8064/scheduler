@@ -34,6 +34,10 @@
 4. Docker image release path complete (immutable tags, smoke-tested image artifact).
 5. Release gate policy active: all required CI stages green before release.
 
+### UX Gating Rule
+
+Before implementing new UI features, complete one section end-to-end using the flow and done-criteria in `docs/product/ux-section-flows.md`.
+
 ## Reuse Targets and Landing Zones
 
 Use this section as the implementation queue for pulling proven pieces from Aribra to JobBOSS Connector and PrintMaster.

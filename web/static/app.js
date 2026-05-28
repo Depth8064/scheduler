@@ -2,9 +2,41 @@ const CSRF_COOKIE_NAME = 'scheduler_csrf';
 const page = document.body.dataset.page;
 const authContent = document.getElementById('auth-content');
 const serviceStatus = document.getElementById('service-status');
+const globalBanner = document.getElementById('global-banner');
 
 let currentUser = null;
 let activeAssignmentWorkstationId = null;
+let sessionRedirectScheduled = false;
+
+function parseErrorBody(text) {
+  if (!text) return '';
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed.error === 'string') {
+      return parsed.error;
+    }
+  } catch (err) {
+    // Keep original body when not JSON.
+  }
+  return text;
+}
+
+function setGlobalBanner(message, tone = 'info') {
+  if (!globalBanner) return;
+  if (!message) {
+    globalBanner.hidden = true;
+    globalBanner.textContent = '';
+    globalBanner.classList.remove('error', 'success');
+    return;
+  }
+
+  globalBanner.hidden = false;
+  globalBanner.textContent = message;
+  globalBanner.classList.remove('error', 'success');
+  if (tone === 'error' || tone === 'success') {
+    globalBanner.classList.add(tone);
+  }
+}
 
 function getCookie(name) {
   const matches = document.cookie.match(new RegExp('(^|; )' + name.replace(/([.$?*|{}()\[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
@@ -32,12 +64,28 @@ async function apiRequest(method, path, payload) {
     options.body = JSON.stringify(payload);
   }
 
-  const res = await fetch(path, options);
+  let res;
+  try {
+    res = await fetch(path, options);
+  } catch (err) {
+    const networkErr = new Error('Network error. Check connection and try again.');
+    networkErr.cause = err;
+    throw networkErr;
+  }
+
+  if (res.status === 401 && page !== 'login' && !sessionRedirectScheduled) {
+    sessionRedirectScheduled = true;
+    setGlobalBanner('Your session expired. Redirecting to sign in...', 'error');
+    window.setTimeout(() => {
+      window.location.assign('/login');
+    }, 700);
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const err = new Error(`${method} ${path} failed: ${res.status}`);
     err.status = res.status;
-    err.body = text;
+    err.body = parseErrorBody(text);
     throw err;
   }
 
@@ -96,26 +144,43 @@ function setRoleNavigation(role) {
 function renderAuthPanel(user) {
   if (!authContent) return;
   authContent.innerHTML = '';
+
   const wrap = document.createElement('div');
   wrap.className = 'notice';
-  wrap.innerHTML = `
-    <p><strong>Signed in as:</strong> ${user.username}</p>
-    <p><strong>Role:</strong> ${user.role}</p>
-    <p><strong>Assigned workstations:</strong> ${user.assigned_workstation_ids.length ? user.assigned_workstation_ids.join(', ') : 'All'}</p>
-  `;
+  const identityLine = document.createElement('p');
+  identityLine.textContent = `Signed in as: ${user.username}`;
+  const roleLine = document.createElement('p');
+  roleLine.textContent = `Role: ${user.role}`;
+  const stationLine = document.createElement('p');
+  const assigned = user.assigned_workstation_ids || [];
+  stationLine.textContent = `Assigned workstations: ${assigned.length ? assigned.join(', ') : 'All workstations'}`;
+  wrap.appendChild(identityLine);
+  wrap.appendChild(roleLine);
+  wrap.appendChild(stationLine);
   authContent.appendChild(wrap);
 
   const button = document.createElement('button');
   button.textContent = 'Sign out';
   button.addEventListener('click', async () => {
-    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: withCSRF() });
-    window.location.assign('/login');
+    button.disabled = true;
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: withCSRF() });
+      window.location.assign('/login');
+    } catch (err) {
+      setGlobalBanner('Unable to sign out right now. Please try again.', 'error');
+      button.disabled = false;
+    }
   });
   authContent.appendChild(button);
 }
 
 async function fetchCurrentUser() {
-  const response = await fetch('/api/v1/auth/me', { credentials: 'same-origin' });
+  let response;
+  try {
+    response = await fetch('/api/v1/auth/me', { credentials: 'same-origin', cache: 'no-store' });
+  } catch (err) {
+    return null;
+  }
   if (!response.ok) {
     return null;
   }
@@ -139,15 +204,60 @@ async function fetchHealth() {
   if (!serviceStatus) return;
 
   try {
+    serviceStatus.textContent = 'Checking scheduler status...';
     const response = await fetch('/healthz', { cache: 'no-store' });
     if (!response.ok) throw new Error('unhealthy');
     const payload = await response.json();
     serviceStatus.textContent = `Online • ${payload.status} • ${new Date(payload.time).toLocaleTimeString()}`;
     serviceStatus.classList.remove('failure');
+    setGlobalBanner('');
   } catch (err) {
     serviceStatus.textContent = 'Offline • health check failed';
     serviceStatus.classList.add('failure');
   }
+}
+
+function setLoginPending(loginForm, pending) {
+  if (!loginForm) return;
+  const button = loginForm.querySelector('#login-submit');
+  const username = loginForm.querySelector('#username');
+  const password = loginForm.querySelector('#password');
+  if (button) {
+    button.disabled = pending;
+    button.textContent = pending ? 'Signing in...' : 'Sign in';
+  }
+  if (username) username.disabled = pending;
+  if (password) password.disabled = pending;
+}
+
+function setLoginStatus(message, tone = 'info') {
+  const loginStatus = document.getElementById('login-status');
+  if (!loginStatus) return;
+  if (!message) {
+    loginStatus.style.display = 'none';
+    loginStatus.textContent = '';
+    loginStatus.classList.remove('notice-success', 'notice-error');
+    return;
+  }
+
+  loginStatus.style.display = 'block';
+  loginStatus.textContent = message;
+  loginStatus.classList.remove('notice-success', 'notice-error');
+  if (tone === 'success') loginStatus.classList.add('notice-success');
+  if (tone === 'error') loginStatus.classList.add('notice-error');
+}
+
+function setLoginError(message) {
+  const loginError = document.getElementById('login-error');
+  if (!loginError) return;
+  if (!message) {
+    loginError.style.display = 'none';
+    loginError.textContent = '';
+    return;
+  }
+
+  loginError.style.display = 'block';
+  loginError.textContent = message;
 }
 
 function formatDateTime(isoString) {
@@ -552,26 +662,25 @@ function bindOperatorForm() {
 
 async function initLoginPage() {
   const loginForm = document.getElementById('login-form');
-  const loginError = document.getElementById('login-error');
   if (!loginForm) return;
 
+  setLoginStatus('Checking for active session...');
   const existing = await fetchCurrentUser();
   if (existing) {
+    setLoginStatus('Session found. Redirecting...', 'success');
     window.location.assign(roleHomePath(existing.role));
     return;
   }
+  setLoginStatus('');
 
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const username = loginForm.querySelector('#username').value.trim();
     const password = loginForm.querySelector('#password').value;
-    const button = loginForm.querySelector('button[type="submit"]');
-    button.disabled = true;
 
-    if (loginError) {
-      loginError.style.display = 'none';
-      loginError.textContent = '';
-    }
+    setLoginPending(loginForm, true);
+    setLoginError('');
+    setLoginStatus('Signing in...');
 
     try {
       await apiPost('/api/v1/auth/login', { username, password });
@@ -579,14 +688,16 @@ async function initLoginPage() {
       if (!user) {
         throw new Error('Unable to load user session');
       }
+      setLoginStatus('Sign-in successful. Redirecting...', 'success');
       window.location.assign(roleHomePath(user.role));
     } catch (err) {
-      if (loginError) {
-        loginError.style.display = 'block';
-        loginError.textContent = err.body || 'Sign in failed. Verify your credentials and try again.';
-      }
+      const detail = err.status === 401
+        ? 'Sign in failed. Verify your username and password and try again.'
+        : (err.body || err.message || 'Sign in failed. Please try again.');
+      setLoginStatus('');
+      setLoginError(detail);
     } finally {
-      button.disabled = false;
+      setLoginPending(loginForm, false);
     }
   });
 }

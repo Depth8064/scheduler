@@ -1,10 +1,9 @@
-// app.js — provides VM-style behaviors for the dashboard
-
 const CSRF_COOKIE_NAME = 'scheduler_csrf';
+const page = document.body.dataset.page;
 const authContent = document.getElementById('auth-content');
 const serviceStatus = document.getElementById('service-status');
-let currentUserRole = null;
-let currentUserId = null;
+
+let currentUser = null;
 let activeAssignmentWorkstationId = null;
 
 function getCookie(name) {
@@ -16,122 +15,6 @@ function withCSRF(headers = {}) {
   const token = getCookie(CSRF_COOKIE_NAME);
   if (token) headers['X-CSRF-Token'] = token;
   return headers;
-}
-
-function createLoginForm() {
-  const form = document.createElement('form');
-  form.id = 'login-form';
-  form.className = 'form-row';
-
-  const uWrap = document.createElement('div');
-  const lUser = document.createElement('label'); lUser.htmlFor = 'username'; lUser.textContent = 'Username';
-  const inpUser = document.createElement('input'); inpUser.id = 'username'; inpUser.name = 'username'; inpUser.autocomplete = 'username'; inpUser.required = true;
-  uWrap.appendChild(lUser); uWrap.appendChild(inpUser);
-
-  const pWrap = document.createElement('div');
-  const lPass = document.createElement('label'); lPass.htmlFor = 'password'; lPass.textContent = 'Password';
-  const inpPass = document.createElement('input'); inpPass.id = 'password'; inpPass.name = 'password'; inpPass.type = 'password'; inpPass.autocomplete = 'current-password'; inpPass.required = true;
-  pWrap.appendChild(lPass); pWrap.appendChild(inpPass);
-
-  const btn = document.createElement('button'); btn.type = 'submit'; btn.textContent = 'Sign in';
-
-  form.appendChild(uWrap); form.appendChild(pWrap); form.appendChild(btn);
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const username = inpUser.value.trim();
-    const password = inpPass.value;
-    authContent.classList.add('loading');
-
-    try {
-      const response = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: Object.assign({ 'Content-Type': 'application/json' }, withCSRF()),
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (!response.ok) throw new Error('Login failed');
-
-      await refreshAuth();
-    } catch (err) {
-      authContent.innerHTML = '<p class="notice">Unable to sign in. Confirm backend credentials and retry.</p>';
-      setTimeout(refreshAuth, 2000);
-    } finally {
-      authContent.classList.remove('loading');
-    }
-  });
-
-  return form;
-}
-
-function renderLoginForm() {
-  currentUserRole = null;
-  currentUserId = null;
-  authContent.innerHTML = '';
-  authContent.appendChild(createLoginForm());
-  const hint = document.createElement('p');
-  hint.style.marginTop = '12px';
-  hint.style.color = 'var(--muted)';
-  hint.style.fontSize = '0.95rem';
-  hint.textContent = 'Use the API login endpoint to sign in and unlock admin/workstation data.';
-  authContent.appendChild(hint);
-
-  showAdminPanels(null);
-}
-
-function renderUserInfo(user) {
-  currentUserRole = user.role;
-  currentUserId = user.user_id;
-  authContent.innerHTML = '';
-  const wrap = document.createElement('div');
-  wrap.className = 'notice';
-  wrap.innerHTML = `
-    <p><strong>Signed in as:</strong> ${user.username}</p>
-    <p><strong>Role:</strong> ${user.role}</p>
-    <p><strong>Assigned workstations:</strong> ${user.assigned_workstation_ids.length ? user.assigned_workstation_ids.join(', ') : 'All'}</p>
-  `;
-  authContent.appendChild(wrap);
-
-  const btn = document.createElement('button'); btn.id = 'logout-button'; btn.textContent = 'Sign out';
-  btn.addEventListener('click', async () => {
-    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: withCSRF() });
-    await refreshAuth();
-  });
-  authContent.appendChild(btn);
-
-  showAdminPanels(user.role);
-}
-
-async function refreshAuth() {
-  authContent.classList.add('loading');
-  try {
-    const response = await fetch('/api/v1/auth/me', { credentials: 'same-origin' });
-    if (response.ok) {
-      const user = await response.json();
-      renderUserInfo(user);
-    } else {
-      renderLoginForm();
-    }
-  } catch (err) {
-    authContent.innerHTML = '<p class="notice">Unable to reach auth API. Backend may not be running.</p>';
-  } finally {
-    authContent.classList.remove('loading');
-    await initPage();
-  }
-}
-
-async function fetchHealth() {
-  try {
-    const response = await fetch('/healthz', { cache: 'no-store' });
-    if (!response.ok) throw new Error('unhealthy');
-    const payload = await response.json();
-    serviceStatus.textContent = `Online • ${payload.status} • ${new Date(payload.time).toLocaleTimeString()}`;
-    serviceStatus.classList.remove('failure');
-  } catch (err) {
-    serviceStatus.textContent = 'Offline • health check failed';
-    serviceStatus.classList.add('failure');
-  }
 }
 
 async function apiRequest(method, path, payload) {
@@ -185,15 +68,85 @@ function apiDelete(path) {
   return apiRequest('DELETE', path);
 }
 
-function showAdminPanels(role) {
-  const adminPanel = document.getElementById('admin-panel');
-  const usersPanel = document.getElementById('users-panel');
+function roleHomePath(role) {
+  return role === 'admin' ? '/dashboard' : '/operator';
+}
+
+function setRoleNavigation(role) {
+  const navDashboard = document.getElementById('nav-dashboard');
+  const navUsers = document.getElementById('nav-users');
+  const navWorkstations = document.getElementById('nav-workstations');
+  const navAdmin = document.getElementById('nav-admin');
+  const navOperator = document.getElementById('nav-operator');
+
+  [navDashboard, navUsers, navWorkstations, navAdmin, navOperator].forEach(link => {
+    if (link) link.style.display = 'none';
+  });
+
   if (role === 'admin') {
-    if (adminPanel) adminPanel.style.display = 'block';
-    if (usersPanel) usersPanel.style.display = 'block';
-  } else {
-    if (adminPanel) adminPanel.style.display = 'none';
-    if (usersPanel) usersPanel.style.display = 'none';
+    if (navDashboard) navDashboard.style.display = 'inline-flex';
+    if (navUsers) navUsers.style.display = 'inline-flex';
+    if (navWorkstations) navWorkstations.style.display = 'inline-flex';
+    if (navAdmin) navAdmin.style.display = 'inline-flex';
+  } else if (role === 'workstation') {
+    if (navOperator) navOperator.style.display = 'inline-flex';
+  }
+}
+
+function renderAuthPanel(user) {
+  if (!authContent) return;
+  authContent.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'notice';
+  wrap.innerHTML = `
+    <p><strong>Signed in as:</strong> ${user.username}</p>
+    <p><strong>Role:</strong> ${user.role}</p>
+    <p><strong>Assigned workstations:</strong> ${user.assigned_workstation_ids.length ? user.assigned_workstation_ids.join(', ') : 'All'}</p>
+  `;
+  authContent.appendChild(wrap);
+
+  const button = document.createElement('button');
+  button.textContent = 'Sign out';
+  button.addEventListener('click', async () => {
+    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: withCSRF() });
+    window.location.assign('/login');
+  });
+  authContent.appendChild(button);
+}
+
+async function fetchCurrentUser() {
+  const response = await fetch('/api/v1/auth/me', { credentials: 'same-origin' });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}
+
+async function ensureProtectedUser() {
+  const user = await fetchCurrentUser();
+  if (!user) {
+    window.location.assign('/login');
+    return null;
+  }
+
+  currentUser = user;
+  setRoleNavigation(user.role);
+  renderAuthPanel(user);
+  return user;
+}
+
+async function fetchHealth() {
+  if (!serviceStatus) return;
+
+  try {
+    const response = await fetch('/healthz', { cache: 'no-store' });
+    if (!response.ok) throw new Error('unhealthy');
+    const payload = await response.json();
+    serviceStatus.textContent = `Online • ${payload.status} • ${new Date(payload.time).toLocaleTimeString()}`;
+    serviceStatus.classList.remove('failure');
+  } catch (err) {
+    serviceStatus.textContent = 'Offline • health check failed';
+    serviceStatus.classList.add('failure');
   }
 }
 
@@ -207,6 +160,11 @@ function createMetaItem(label, value) {
   const span = document.createElement('span');
   span.textContent = `${label}: ${value}`;
   return span;
+}
+
+function showUnauthorizedMessage(container, message) {
+  if (!container) return;
+  container.innerHTML = `<p class="notice">${message}</p>`;
 }
 
 function renderUserList(list) {
@@ -258,7 +216,7 @@ function renderUserList(list) {
     actions.appendChild(roleButton);
     actions.appendChild(activeButton);
 
-    if (user.id !== currentUserId) {
+    if (currentUser && user.id !== currentUser.user_id) {
       const deleteButton = document.createElement('button');
       deleteButton.textContent = 'Delete';
       deleteButton.style.background = '#b91c1c';
@@ -350,16 +308,10 @@ function renderWorkstationList(list) {
   el.appendChild(ul);
 }
 
-function showUnauthorizedMessage(container, message) {
-  if (!container) return;
-  container.innerHTML = `<p class="notice">${message}</p>`;
-}
-
 async function loadUsersPage() {
   const listElement = document.getElementById('users-list');
   if (!listElement) return;
-
-  if (currentUserRole !== 'admin') {
+  if (!currentUser || currentUser.role !== 'admin') {
     showUnauthorizedMessage(listElement, 'Sign in as an admin to manage users.');
     return;
   }
@@ -377,12 +329,9 @@ async function loadWorkstationsPage() {
   const listElement = document.getElementById('workstations-list');
   const assignmentsPanel = document.getElementById('assignments-panel');
   if (!listElement) return;
+  if (assignmentsPanel) assignmentsPanel.style.display = 'none';
 
-  if (assignmentsPanel) {
-    assignmentsPanel.style.display = 'none';
-  }
-
-  if (currentUserRole !== 'admin') {
+  if (!currentUser || currentUser.role !== 'admin') {
     showUnauthorizedMessage(listElement, 'Sign in as an admin to manage workstations.');
     return;
   }
@@ -398,6 +347,11 @@ async function loadWorkstationsPage() {
 
 async function createUser(event) {
   event.preventDefault();
+  if (!currentUser || currentUser.role !== 'admin') {
+    alert('Admin access is required to create users.');
+    return;
+  }
+
   const form = event.target;
   const username = form.querySelector('#user-username').value.trim();
   const password = form.querySelector('#user-password').value;
@@ -412,7 +366,7 @@ async function createUser(event) {
     form.querySelector('#user-active').checked = true;
     await loadUsersPage();
   } catch (err) {
-    alert(err.body || err.message);
+    alert(err.body || err.message || 'Failed to create user');
   } finally {
     button.disabled = false;
   }
@@ -420,6 +374,11 @@ async function createUser(event) {
 
 async function createWorkstation(event) {
   event.preventDefault();
+  if (!currentUser || currentUser.role !== 'admin') {
+    alert('Admin access is required to create workstations.');
+    return;
+  }
+
   const form = event.target;
   const name = form.querySelector('#workstation-name').value.trim();
   const stationType = form.querySelector('#workstation-type').value.trim();
@@ -433,7 +392,7 @@ async function createWorkstation(event) {
     form.querySelector('#workstation-active').checked = true;
     await loadWorkstationsPage();
   } catch (err) {
-    alert(err.body || err.message);
+    alert(err.body || err.message || 'Failed to create workstation');
   } finally {
     button.disabled = false;
   }
@@ -524,7 +483,7 @@ async function saveWorkstationAssignments(event) {
     .filter(input => input.checked)
     .map(input => input.value);
 
-  status.textContent = 'Saving assignment…';
+  status.textContent = 'Saving assignment...';
   try {
     await apiPut(`/api/v1/admin/workstations/${activeAssignmentWorkstationId}/users`, { user_ids: selectedUserIds });
     status.textContent = 'Workstation assignments updated.';
@@ -546,33 +505,134 @@ function bindWorkstationsPage() {
   if (assignForm) assignForm.addEventListener('submit', saveWorkstationAssignments);
 }
 
-async function initPage() {
-  const page = document.body.dataset.page;
+function bindAdminPageButtons() {
+  const loadUsersBtn = document.getElementById('btn-load-users');
+  const loadWorkstationsBtn = document.getElementById('btn-load-workstations');
+
+  if (loadUsersBtn) {
+    loadUsersBtn.addEventListener('click', loadUsersPage);
+  }
+  if (loadWorkstationsBtn) {
+    loadWorkstationsBtn.addEventListener('click', loadWorkstationsPage);
+  }
+}
+
+function renderOperatorAssignments(user) {
+  const target = document.getElementById('operator-assigned-workstations');
+  if (!target) return;
+
+  const ids = user.assigned_workstation_ids || [];
+  if (ids.length === 0) {
+    target.innerHTML = '<p class="notice">No workstation assignments found.</p>';
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'endpoint-list';
+  ids.forEach(id => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>Assigned workstation</span><code>${id}</code>`;
+    ul.appendChild(li);
+  });
+  target.innerHTML = '';
+  target.appendChild(ul);
+}
+
+function bindOperatorForm() {
+  const form = document.getElementById('operator-count-form');
+  const status = document.getElementById('operator-count-status');
+  if (!form || !status) return;
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    status.style.display = 'block';
+    status.textContent = 'Count API is not available in backend yet. UI is staged for the upcoming execution-progress endpoint.';
+  });
+}
+
+async function initLoginPage() {
+  const loginForm = document.getElementById('login-form');
+  const loginError = document.getElementById('login-error');
+  if (!loginForm) return;
+
+  const existing = await fetchCurrentUser();
+  if (existing) {
+    window.location.assign(roleHomePath(existing.role));
+    return;
+  }
+
+  loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = loginForm.querySelector('#username').value.trim();
+    const password = loginForm.querySelector('#password').value;
+    const button = loginForm.querySelector('button[type="submit"]');
+    button.disabled = true;
+
+    if (loginError) {
+      loginError.style.display = 'none';
+      loginError.textContent = '';
+    }
+
+    try {
+      await apiPost('/api/v1/auth/login', { username, password });
+      const user = await fetchCurrentUser();
+      if (!user) {
+        throw new Error('Unable to load user session');
+      }
+      window.location.assign(roleHomePath(user.role));
+    } catch (err) {
+      if (loginError) {
+        loginError.style.display = 'block';
+        loginError.textContent = err.body || 'Sign in failed. Verify your credentials and try again.';
+      }
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+async function initProtectedPage() {
+  const user = await ensureProtectedUser();
+  if (!user) return;
+
+  const expectedRole = page === 'operator' ? 'workstation' : 'admin';
+  if (user.role !== expectedRole) {
+    window.location.assign(roleHomePath(user.role));
+    return;
+  }
+
+  await fetchHealth();
+  setInterval(fetchHealth, 30000);
+
   if (page === 'users') {
     bindUsersPage();
     await loadUsersPage();
+    return;
   }
+
   if (page === 'workstations') {
     bindWorkstationsPage();
     await loadWorkstationsPage();
+    return;
+  }
+
+  if (page === 'admin') {
+    bindAdminPageButtons();
+    return;
+  }
+
+  if (page === 'operator') {
+    renderOperatorAssignments(user);
+    bindOperatorForm();
   }
 }
 
-function initAdminPanel() {
-  const btnW = document.getElementById('btn-load-workstations');
-  const btnU = document.getElementById('btn-load-users');
-  const adminPanel = document.getElementById('admin-panel');
-  const usersPanel = document.getElementById('users-panel');
-
-  if (adminPanel) adminPanel.style.display = 'none';
-  if (usersPanel) usersPanel.style.display = 'none';
-
-  if (btnW) btnW.addEventListener('click', loadWorkstations);
-  if (btnU) btnU.addEventListener('click', loadUsers);
+async function initApp() {
+  if (page === 'login') {
+    await initLoginPage();
+    return;
+  }
+  await initProtectedPage();
 }
 
-// Initialize
-fetchHealth();
-setInterval(fetchHealth, 30000);
-initAdminPanel();
-refreshAuth();
+initApp();

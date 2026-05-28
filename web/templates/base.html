@@ -14,10 +14,11 @@
         <a href="/dashboard">Scheduler</a>
       </div>
       <nav class="site-nav">
-        <a href="/dashboard" class="{{ if eq .Active "dashboard" }}active{{ end }}">Dashboard</a>
-        <a href="/users" class="{{ if eq .Active "users" }}active{{ end }}">Users</a>
-        <a href="/workstations" class="{{ if eq .Active "workstations" }}active{{ end }}">Workstations</a>
-        <a href="/admin" class="{{ if eq .Active "admin" }}active{{ end }}">Admin</a>
+        <a id="nav-dashboard" href="/dashboard" class="{{ if eq .Active "dashboard" }}active{{ end }}">Dashboard</a>
+        <a id="nav-users" href="/users" class="{{ if eq .Active "users" }}active{{ end }}">Users</a>
+        <a id="nav-workstations" href="/workstations" class="{{ if eq .Active "workstations" }}active{{ end }}">Workstations</a>
+        <a id="nav-admin" href="/admin" class="{{ if eq .Active "admin" }}active{{ end }}">Admin</a>
+        <a id="nav-operator" href="/operator" class="{{ if eq .Active "operator" }}active{{ end }}">Operator</a>
       </nav>
     </header>
 

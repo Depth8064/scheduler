@@ -23,6 +23,15 @@ body {
   padding: 24px;
 }
 
+body.login-body {
+  display: grid;
+  place-items: center;
+}
+
+#nav-operator {
+  display: none;
+}
+
 .page-shell {
   display: grid;
   gap: 24px;
@@ -212,6 +221,16 @@ input {
   font-size: 1rem;
 }
 
+select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
 button {
   cursor: pointer;
   border: none;
@@ -261,4 +280,12 @@ pre {
 
 .loading {
   opacity: 0.35;
+}
+
+.login-shell {
+  width: min(520px, 92vw);
+}
+
+.login-card h1 {
+  margin-top: 0;
 }

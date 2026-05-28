@@ -1,0 +1,32 @@
+{{ define "operator" }}
+{{ template "base" . }}
+{{ end }}
+
+{{ define "content" }}
+<section class="hero panel">
+  <h1>Workstation Console</h1>
+  <p>This view is optimized for workstation users. Focus here is quick progress capture and current station assignments.</p>
+</section>
+
+<section class="panel">
+  <h2>Your assigned workstations</h2>
+  <div id="operator-assigned-workstations"></div>
+</section>
+
+<section class="panel">
+  <h2>Quick count update</h2>
+  <p class="notice">Count persistence endpoint is not exposed by backend yet. This panel is ready for wiring once execution progress APIs are added.</p>
+  <form id="operator-count-form" class="form-row">
+    <div>
+      <label for="operator-workstation-id">Workstation ID</label>
+      <input id="operator-workstation-id" name="workstation_id" required />
+    </div>
+    <div>
+      <label for="operator-count-value">Completed count</label>
+      <input id="operator-count-value" name="count" type="number" min="0" step="1" required />
+    </div>
+    <button type="submit">Submit count</button>
+  </form>
+  <div id="operator-count-status" class="notice" style="display:none;"></div>
+</section>
+{{ end }}

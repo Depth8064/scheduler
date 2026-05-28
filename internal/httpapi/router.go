@@ -103,16 +103,22 @@ func NewRouter(logger *logging.Manager, authManager *auth.Manager, repositories 
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join("web", "static")))))
 	mux.Handle("/docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir("docs"))))
-	mux.HandleFunc("/dashboard", pageHandler(templates, "dashboard", pageData{Title: "Scheduler Dashboard", Active: "dashboard"}))
-	mux.HandleFunc("/admin", pageHandler(templates, "admin", pageData{Title: "Admin Configuration", Active: "admin"}))
-	mux.HandleFunc("/users", pageHandler(templates, "users", pageData{Title: "User Management", Active: "users"}))
-	mux.HandleFunc("/workstations", pageHandler(templates, "workstations", pageData{Title: "Workstation Management", Active: "workstations"}))
+	mux.HandleFunc("/login", loginPageHandler(templates, authManager, pageData{Title: "Scheduler Login", Active: "login"}))
+	mux.HandleFunc("/dashboard", protectedPageHandler(templates, "dashboard", pageData{Title: "Scheduler Dashboard", Active: "dashboard"}, authManager, store.RoleAdmin))
+	mux.HandleFunc("/admin", protectedPageHandler(templates, "admin", pageData{Title: "Admin Configuration", Active: "admin"}, authManager, store.RoleAdmin))
+	mux.HandleFunc("/users", protectedPageHandler(templates, "users", pageData{Title: "User Management", Active: "users"}, authManager, store.RoleAdmin))
+	mux.HandleFunc("/workstations", protectedPageHandler(templates, "workstations", pageData{Title: "Workstation Management", Active: "workstations"}, authManager, store.RoleAdmin))
+	mux.HandleFunc("/operator", protectedPageHandler(templates, "operator", pageData{Title: "Workstation Console", Active: "operator"}, authManager, store.RoleWorkstation))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		pageHandler(templates, "dashboard", pageData{Title: "Scheduler Dashboard", Active: "dashboard"})(w, r)
+		if session, err := currentSession(r, authManager); err == nil {
+			http.Redirect(w, r, roleHomePath(session.Role), http.StatusFound)
+			return
+		}
+		http.Redirect(w, r, "/login", http.StatusFound)
 	})
 
 	return requestLogger(logger, mux)
@@ -131,10 +137,12 @@ func parseTemplates() (map[string]*template.Template, error) {
 	}
 
 	pages := map[string]string{
+		"login":        "login.html",
 		"dashboard":    "dashboard.html",
 		"admin":        "admin.html",
 		"users":        "users.html",
 		"workstations": "workstations.html",
+		"operator":     "operator.html",
 	}
 
 	templates := make(map[string]*template.Template, len(pages))
@@ -169,6 +177,52 @@ func pageHandler(templates map[string]*template.Template, templateName string, d
 			http.Error(w, "template render error", http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+func loginPageHandler(templates map[string]*template.Template, authManager *auth.Manager, data pageData) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if session, err := currentSession(r, authManager); err == nil {
+			http.Redirect(w, r, roleHomePath(session.Role), http.StatusFound)
+			return
+		}
+
+		pageHandler(templates, "login", data)(w, r)
+	}
+}
+
+func protectedPageHandler(templates map[string]*template.Template, templateName string, data pageData, authManager *auth.Manager, allowedRoles ...store.UserRole) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, err := currentSession(r, authManager)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		for _, role := range allowedRoles {
+			if session.Role == role {
+				pageHandler(templates, templateName, data)(w, r)
+				return
+			}
+		}
+
+		http.Redirect(w, r, roleHomePath(session.Role), http.StatusFound)
+	}
+}
+
+func roleHomePath(role store.UserRole) string {
+	switch role {
+	case store.RoleAdmin:
+		return "/dashboard"
+	case store.RoleWorkstation:
+		return "/operator"
+	default:
+		return "/login"
 	}
 }
 

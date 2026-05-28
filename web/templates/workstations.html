@@ -1,0 +1,43 @@
+{{ define "workstations" }}
+{{ template "base" . }}
+{{ end }}
+
+{{ define "content" }}
+<section class="hero panel">
+  <h1>Workstation Management</h1>
+  <p>Create workstations, change availability, and manage which users are assigned to each station.</p>
+</section>
+
+<section class="panel">
+  <h2>Create new workstation</h2>
+  <form id="workstation-create-form" class="form-row">
+    <div>
+      <label for="workstation-name">Name</label>
+      <input id="workstation-name" name="name" required />
+    </div>
+    <div>
+      <label for="workstation-type">Station type</label>
+      <input id="workstation-type" name="station_type" required />
+    </div>
+    <div>
+      <label for="workstation-active"><input id="workstation-active" name="active" type="checkbox" checked /> Active</label>
+    </div>
+    <button type="submit">Create workstation</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Workstations</h2>
+  <div id="workstations-list"></div>
+</section>
+
+<section class="panel" id="assignments-panel" style="display: none;">
+  <h2>Manage workstation access</h2>
+  <div id="assignment-header"></div>
+  <form id="workstation-assign-form" class="form-row">
+    <div id="workstation-user-checkboxes"></div>
+    <button type="submit">Save assignments</button>
+  </form>
+  <div id="assignment-status"></div>
+</section>
+{{ end }}

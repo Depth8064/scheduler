@@ -1,0 +1,23 @@
+{{ define "dashboard" }}
+{{ template "base" . }}
+{{ end }}
+
+{{ define "content" }}
+<section class="hero panel">
+  <div>
+    <p class="status-chip">Dashboard ready</p>
+  </div>
+  <h1>Scheduler Dashboard</h1>
+  <p>Welcome to the product scheduling app. Use the navigation to manage users, workstations, and admin settings.</p>
+</section>
+
+<section class="panel">
+  <h2>System status</h2>
+  <p class="notice">The dashboard queries backend endpoints directly so you can see health and auth state immediately.</p>
+  <ul class="endpoint-list">
+    <li><span>Health check</span><code>/healthz</code></li>
+    <li><span>Login</span><code>/api/v1/auth/login</code></li>
+    <li><span>Current user</span><code>/api/v1/auth/me</code></li>
+  </ul>
+</section>
+{{ end }}

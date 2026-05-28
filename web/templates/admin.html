@@ -1,0 +1,24 @@
+{{ define "admin" }}
+{{ template "base" . }}
+{{ end }}
+
+{{ define "content" }}
+<section class="hero panel">
+  <h1>Admin Configuration</h1>
+  <p>Admin-only controls live here. Use the API to manage users and workstations from the backend.</p>
+</section>
+
+<section class="panel">
+  <h2>Admin tools</h2>
+  <div class="form-row">
+    <button id="btn-load-workstations">Load workstations</button>
+    <button id="btn-load-users">Load users</button>
+  </div>
+  <div id="workstations-list" style="margin-top:12px;"></div>
+</section>
+
+<section class="panel">
+  <h2>User list</h2>
+  <div id="users-list"></div>
+</section>
+{{ end }}

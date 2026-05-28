@@ -23,6 +23,69 @@ body {
   padding: 24px;
 }
 
+.page-shell {
+  display: grid;
+  gap: 24px;
+  max-width: 1340px;
+  margin: 0 auto;
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 24px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(209, 213, 219, 0.85);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.brand a {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.2rem;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 10px 14px;
+  border-radius: 12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.site-nav a.active,
+.site-nav a:hover {
+  color: var(--accent);
+  background: rgba(15, 115, 131, 0.08);
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 24px;
+}
+
+.sidebar {
+  display: grid;
+  gap: 24px;
+}
+
+.page-main {
+  display: grid;
+  gap: 24px;
+}
+
 .layout {
   display: grid;
   gap: 24px;

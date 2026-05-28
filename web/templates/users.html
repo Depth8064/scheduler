@@ -1,0 +1,40 @@
+{{ define "users" }}
+{{ template "base" . }}
+{{ end }}
+
+{{ define "content" }}
+<section class="hero panel">
+  <h1>User Management</h1>
+  <p>View and manage users, roles, and workstation access from one place.</p>
+</section>
+
+<section class="panel">
+  <h2>Create new user</h2>
+  <form id="user-create-form" class="form-row">
+    <div>
+      <label for="user-username">Username</label>
+      <input id="user-username" name="username" required />
+    </div>
+    <div>
+      <label for="user-password">Password</label>
+      <input id="user-password" name="password" type="password" required />
+    </div>
+    <div>
+      <label for="user-role">Role</label>
+      <select id="user-role" name="role">
+        <option value="workstation">Workstation</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div>
+      <label for="user-active"><input id="user-active" name="active" type="checkbox" checked /> Active</label>
+    </div>
+    <button type="submit">Create user</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Users</h2>
+  <div id="users-list"></div>
+</section>
+{{ end }}

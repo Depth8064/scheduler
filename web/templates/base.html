@@ -1,0 +1,54 @@
+{{ define "base" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ .Title }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-page="{{ .Active }}">
+  <div class="page-shell">
+    <header class="site-header">
+      <div class="brand">
+        <a href="/dashboard">Scheduler</a>
+      </div>
+      <nav class="site-nav">
+        <a href="/dashboard" class="{{ if eq .Active "dashboard" }}active{{ end }}">Dashboard</a>
+        <a href="/users" class="{{ if eq .Active "users" }}active{{ end }}">Users</a>
+        <a href="/workstations" class="{{ if eq .Active "workstations" }}active{{ end }}">Workstations</a>
+        <a href="/admin" class="{{ if eq .Active "admin" }}active{{ end }}">Admin</a>
+      </nav>
+    </header>
+
+    <div class="page-grid">
+      <aside class="sidebar">
+        <section class="panel status-panel">
+          <div>
+            <p class="status-chip" id="service-status">Loading scheduler status...</p>
+          </div>
+        </section>
+
+        <section class="panel" id="auth-panel">
+          <h2>Authentication</h2>
+          <div id="auth-content">
+            <p class="notice">Loading authentication state...</p>
+          </div>
+        </section>
+      </aside>
+
+      <section class="page-main">
+        {{ block "content" . }}{{ end }}
+      </section>
+    </div>
+
+    <footer class="site-footer">
+      <span>Scheduler UI • Built with Go templates</span>
+      <span><a href="/docs/api/openapi.yaml">API docs</a></span>
+    </footer>
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{ end }}

@@ -615,15 +615,359 @@ function bindWorkstationsPage() {
   if (assignForm) assignForm.addEventListener('submit', saveWorkstationAssignments);
 }
 
-function bindAdminPageButtons() {
-  const loadUsersBtn = document.getElementById('btn-load-users');
-  const loadWorkstationsBtn = document.getElementById('btn-load-workstations');
+let adminWorkstationsCache = [];
 
-  if (loadUsersBtn) {
-    loadUsersBtn.addEventListener('click', loadUsersPage);
+function setAdminStatus(message, tone = 'info') {
+  const status = document.getElementById('schedule-action-status');
+  if (!status) return;
+  if (!message) {
+    status.style.display = 'none';
+    status.textContent = '';
+    status.classList.remove('notice-error', 'notice-success');
+    return;
   }
-  if (loadWorkstationsBtn) {
-    loadWorkstationsBtn.addEventListener('click', loadWorkstationsPage);
+
+  status.style.display = 'block';
+  status.textContent = message;
+  status.classList.remove('notice-error', 'notice-success');
+  if (tone === 'error') status.classList.add('notice-error');
+  if (tone === 'success') status.classList.add('notice-success');
+}
+
+function setPOImportStatus(message, tone = 'info') {
+  const status = document.getElementById('po-import-status');
+  if (!status) return;
+  if (!message) {
+    status.style.display = 'none';
+    status.textContent = '';
+    status.classList.remove('notice-error', 'notice-success');
+    return;
+  }
+
+  status.style.display = 'block';
+  status.textContent = message;
+  status.classList.remove('notice-error', 'notice-success');
+  if (tone === 'error') status.classList.add('notice-error');
+  if (tone === 'success') status.classList.add('notice-success');
+}
+
+async function loadAdminWorkstationsCache() {
+  const workstations = await apiGet('/api/v1/admin/workstations');
+  adminWorkstationsCache = (workstations || []).filter(workstation => workstation.active);
+}
+
+function buildWorkstationSelect(defaultValue = '') {
+  const select = document.createElement('select');
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose workstation';
+  select.appendChild(placeholder);
+
+  adminWorkstationsCache.forEach(workstation => {
+    const option = document.createElement('option');
+    option.value = workstation.id;
+    option.textContent = `${workstation.station_type} - ${workstation.name}`;
+    if (defaultValue && defaultValue === workstation.id) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+
+  return select;
+}
+
+async function loadPOInbox() {
+  const target = document.getElementById('po-inbox-list');
+  if (!target) return;
+
+  target.innerHTML = '<p class="notice">Loading PO inbox...</p>';
+  try {
+    const inbox = await apiGet('/api/v1/admin/po-lines');
+    renderPOInbox(inbox || []);
+  } catch (err) {
+    target.innerHTML = `<p class="notice notice-error">Unable to load PO inbox: ${err.body || err.message}</p>`;
+  }
+}
+
+function renderPOInbox(items) {
+  const target = document.getElementById('po-inbox-list');
+  if (!target) return;
+
+  if (!items || items.length === 0) {
+    target.innerHTML = '<p class="notice">No unpromoted PO lines found.</p>';
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'endpoint-list';
+
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.style.flexDirection = 'column';
+    li.style.alignItems = 'stretch';
+
+    const heading = document.createElement('div');
+    heading.innerHTML = `<strong>${item.external_po_number}</strong> <span>${item.external_part_number} / Item ${item.external_item_number}</span>`;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta-row';
+    meta.appendChild(createMetaItem('Qty', item.qty_required));
+    meta.appendChild(createMetaItem('Status', item.status || 'unknown'));
+    meta.appendChild(createMetaItem('Required', item.required_date ? item.required_date.slice(0, 10) : 'n/a'));
+
+    const actions = document.createElement('div');
+    actions.className = 'meta-row';
+
+    const promoteButton = document.createElement('button');
+    promoteButton.textContent = 'Promote (unreleased)';
+    promoteButton.addEventListener('click', async () => {
+      promoteButton.disabled = true;
+      try {
+        await apiPost(`/api/v1/admin/po-lines/${item.id}/promote`, {});
+        setAdminStatus(`Promoted ${item.external_po_number} to unreleased schedule item.`, 'success');
+        await Promise.all([loadPOInbox(), loadScheduleItems()]);
+      } catch (err) {
+        setAdminStatus(err.body || err.message || 'Failed to promote PO line.', 'error');
+      } finally {
+        promoteButton.disabled = false;
+      }
+    });
+
+    const assignSelect = buildWorkstationSelect();
+    const promoteAssignButton = document.createElement('button');
+    promoteAssignButton.textContent = 'Promote + assign';
+    promoteAssignButton.addEventListener('click', async () => {
+      const workstationID = assignSelect.value;
+      if (!workstationID) {
+        setAdminStatus('Select a workstation before promote + assign.', 'error');
+        return;
+      }
+      promoteAssignButton.disabled = true;
+      try {
+        await apiPost(`/api/v1/admin/po-lines/${item.id}/promote`, { workstation_id: workstationID });
+        setAdminStatus(`Promoted and queued ${item.external_po_number}.`, 'success');
+        await Promise.all([loadPOInbox(), loadScheduleItems()]);
+      } catch (err) {
+        setAdminStatus(err.body || err.message || 'Failed to promote and assign PO line.', 'error');
+      } finally {
+        promoteAssignButton.disabled = false;
+      }
+    });
+
+    actions.appendChild(promoteButton);
+    actions.appendChild(assignSelect);
+    actions.appendChild(promoteAssignButton);
+
+    li.appendChild(heading);
+    li.appendChild(meta);
+    li.appendChild(actions);
+    ul.appendChild(li);
+  });
+
+  target.innerHTML = '';
+  target.appendChild(ul);
+}
+
+async function loadScheduleItems() {
+  const target = document.getElementById('schedule-items-list');
+  if (!target) return;
+
+  target.innerHTML = '<p class="notice">Loading schedule items...</p>';
+  try {
+    const items = await apiGet('/api/v1/admin/schedule-items?limit=200');
+    renderScheduleItems(items || []);
+  } catch (err) {
+    target.innerHTML = `<p class="notice notice-error">Unable to load schedule items: ${err.body || err.message}</p>`;
+  }
+}
+
+function renderScheduleItems(items) {
+  const target = document.getElementById('schedule-items-list');
+  if (!target) return;
+
+  if (!items || items.length === 0) {
+    target.innerHTML = '<p class="notice">No schedule items yet. Promote a PO line from the inbox.</p>';
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'endpoint-list';
+
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.style.flexDirection = 'column';
+    li.style.alignItems = 'stretch';
+
+    const heading = document.createElement('div');
+    heading.innerHTML = `<strong>${item.part_number}</strong> <span>${item.external_job_number || 'manual item'}</span>`;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta-row';
+    const status = document.createElement('span');
+    status.className = 'status-tag';
+    status.textContent = item.status;
+    meta.appendChild(status);
+    meta.appendChild(createMetaItem('Qty', item.qty_required));
+    meta.appendChild(createMetaItem('Priority', item.priority));
+    meta.appendChild(createMetaItem('Version', item.version));
+    if (item.workstation_id) {
+      meta.appendChild(createMetaItem('Workstation', item.workstation_id));
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'meta-row';
+
+    if (item.status === 'unreleased') {
+      const releaseButton = document.createElement('button');
+      releaseButton.textContent = 'Release';
+      releaseButton.addEventListener('click', async () => {
+        releaseButton.disabled = true;
+        try {
+          await apiPost(`/api/v1/admin/schedule-items/${item.id}/release`, {});
+          setAdminStatus('Item released.', 'success');
+          await loadScheduleItems();
+        } catch (err) {
+          setAdminStatus(err.body || err.message || 'Failed to release item.', 'error');
+        } finally {
+          releaseButton.disabled = false;
+        }
+      });
+      actions.appendChild(releaseButton);
+    }
+
+    if (item.status === 'released' || item.status === 'unreleased') {
+      const assignSelect = buildWorkstationSelect(item.workstation_id || '');
+      const assignButton = document.createElement('button');
+      assignButton.textContent = 'Assign';
+      assignButton.addEventListener('click', async () => {
+        if (!assignSelect.value) {
+          setAdminStatus('Select a workstation before assigning.', 'error');
+          return;
+        }
+        assignButton.disabled = true;
+        try {
+          await apiPost(`/api/v1/admin/schedule-items/${item.id}/assign`, { workstation_id: assignSelect.value });
+          setAdminStatus('Item assigned to workstation queue.', 'success');
+          await loadScheduleItems();
+        } catch (err) {
+          setAdminStatus(err.body || err.message || 'Failed to assign item.', 'error');
+        } finally {
+          assignButton.disabled = false;
+        }
+      });
+      actions.appendChild(assignSelect);
+      actions.appendChild(assignButton);
+    }
+
+    if (item.status === 'queued') {
+      const unassignButton = document.createElement('button');
+      unassignButton.textContent = 'Unassign';
+      unassignButton.addEventListener('click', async () => {
+        unassignButton.disabled = true;
+        try {
+          await apiPost(`/api/v1/admin/schedule-items/${item.id}/unassign`, {});
+          setAdminStatus('Item moved back to released.', 'success');
+          await loadScheduleItems();
+        } catch (err) {
+          setAdminStatus(err.body || err.message || 'Failed to unassign item.', 'error');
+        } finally {
+          unassignButton.disabled = false;
+        }
+      });
+      actions.appendChild(unassignButton);
+    }
+
+    const targetDateInput = document.createElement('input');
+    targetDateInput.type = 'date';
+    if (item.target_date) {
+      targetDateInput.value = item.target_date.slice(0, 10);
+    }
+
+    const priorityInput = document.createElement('input');
+    priorityInput.type = 'number';
+    priorityInput.step = '1';
+    priorityInput.value = Number.isFinite(item.priority) ? String(item.priority) : '0';
+
+    const saveMetaButton = document.createElement('button');
+    saveMetaButton.textContent = 'Save metadata';
+    saveMetaButton.addEventListener('click', async () => {
+      saveMetaButton.disabled = true;
+      const payload = {
+        version: item.version,
+        target_date: targetDateInput.value || null,
+        priority: Number.parseInt(priorityInput.value, 10),
+      };
+      try {
+        await apiPatch(`/api/v1/admin/schedule-items/${item.id}`, payload);
+        setAdminStatus('Schedule metadata updated.', 'success');
+        await loadScheduleItems();
+      } catch (err) {
+        setAdminStatus(err.body || err.message || 'Failed to save metadata.', 'error');
+      } finally {
+        saveMetaButton.disabled = false;
+      }
+    });
+
+    actions.appendChild(targetDateInput);
+    actions.appendChild(priorityInput);
+    actions.appendChild(saveMetaButton);
+
+    li.appendChild(heading);
+    li.appendChild(meta);
+    li.appendChild(actions);
+    ul.appendChild(li);
+  });
+
+  target.innerHTML = '';
+  target.appendChild(ul);
+}
+
+async function handlePOImport(event) {
+  event.preventDefault();
+  const form = event.target;
+  const textarea = form.querySelector('#po-import-json');
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (!textarea || !submitButton) return;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(textarea.value);
+    if (!Array.isArray(parsed)) {
+      throw new Error('PO lines payload must be a JSON array.');
+    }
+  } catch (err) {
+    setPOImportStatus(err.message || 'Invalid JSON payload.', 'error');
+    return;
+  }
+
+  submitButton.disabled = true;
+  setPOImportStatus('Importing PO lines...');
+
+  try {
+    const payload = { lines: parsed };
+    const result = await apiPost('/api/v1/admin/po-lines/import', payload);
+    setPOImportStatus(`Imported ${result.imported || 0} PO lines.`, 'success');
+    await loadPOInbox();
+  } catch (err) {
+    setPOImportStatus(err.body || err.message || 'Failed to import PO lines.', 'error');
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+function bindAdminPageButtons() {
+  const loadPOInboxBtn = document.getElementById('btn-load-po-inbox');
+  const loadScheduleItemsBtn = document.getElementById('btn-load-schedule-items');
+  const importForm = document.getElementById('po-import-form');
+
+  if (loadPOInboxBtn) {
+    loadPOInboxBtn.addEventListener('click', loadPOInbox);
+  }
+  if (loadScheduleItemsBtn) {
+    loadScheduleItemsBtn.addEventListener('click', loadScheduleItems);
+  }
+  if (importForm) {
+    importForm.addEventListener('submit', handlePOImport);
   }
 }
 
@@ -729,6 +1073,12 @@ async function initProtectedPage() {
 
   if (page === 'admin') {
     bindAdminPageButtons();
+    try {
+      await loadAdminWorkstationsCache();
+      await Promise.all([loadPOInbox(), loadScheduleItems()]);
+    } catch (err) {
+      setAdminStatus(err.body || err.message || 'Failed to load admin setup data.', 'error');
+    }
     return;
   }
 

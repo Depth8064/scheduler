@@ -4,21 +4,35 @@
 
 {{ define "content" }}
 <section class="hero panel">
-  <h1>Admin Configuration</h1>
-  <p>Admin-only controls live here. Use the API to manage users and workstations from the backend.</p>
+  <h1>Operations Setup</h1>
+  <p>Import JobBOSS PO lines, promote them into schedule items, and release or assign workstations from one workspace.</p>
 </section>
 
 <section class="panel">
-  <h2>Admin tools</h2>
+  <h2>JobBOSS import</h2>
+  <p class="notice">Paste JSON array of PO lines to seed the inbox. Expected keys per row: external_po_number, external_part_number, external_item_number, qty_required, status (optional), required_date (optional).</p>
+  <form id="po-import-form" class="form-row">
+    <div>
+      <label for="po-import-json">PO lines JSON</label>
+      <textarea id="po-import-json" name="po_import_json" rows="8" placeholder='[{"external_po_number":"PO-1001","external_part_number":"PART-22","external_item_number":"10","qty_required":50}]' required></textarea>
+    </div>
+    <button type="submit">Import PO lines</button>
+  </form>
+  <div id="po-import-status" class="notice" style="display:none;"></div>
+</section>
+
+<section class="panel">
+  <h2>PO line inbox</h2>
   <div class="form-row">
-    <button id="btn-load-workstations">Load workstations</button>
-    <button id="btn-load-users">Load users</button>
+    <button id="btn-load-po-inbox">Refresh inbox</button>
+    <button id="btn-load-schedule-items">Refresh schedule items</button>
   </div>
-  <div id="workstations-list" style="margin-top:12px;"></div>
+  <div id="po-inbox-list" style="margin-top:12px;"></div>
 </section>
 
 <section class="panel">
-  <h2>User list</h2>
-  <div id="users-list"></div>
+  <h2>Schedule setup</h2>
+  <div id="schedule-items-list"></div>
+  <div id="schedule-action-status" class="notice" style="display:none;"></div>
 </section>
 {{ end }}

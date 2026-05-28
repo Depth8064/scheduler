@@ -242,6 +242,19 @@ input {
   font-size: 1rem;
 }
 
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+}
+
 select {
   width: 100%;
   padding: 12px 14px;
@@ -279,6 +292,18 @@ button:disabled {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
+}
+
+.meta-row .status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 115, 131, 0.25);
+  color: var(--accent);
+  background: rgba(15, 115, 131, 0.08);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .notice {

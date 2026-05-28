@@ -81,6 +81,7 @@ func NewRouter(logger *logging.Manager, authManager *auth.Manager, repositories 
 
 	adminUsers := newAdminUsersHandler(repositories.Users, authManager)
 	adminWorkstations := newAdminWorkstationsHandler(repositories.Workstations, repositories.Access)
+	adminSchedules := newAdminSchedulesHandler(repositories.Schedules)
 	mux.Handle("/api/v1/admin/users", methodRouter{handlers: map[string]http.Handler{
 		http.MethodGet:  requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminUsers.handleUsers)),
 		http.MethodPost: requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminUsers.handleUsers))),
@@ -99,6 +100,21 @@ func NewRouter(logger *logging.Manager, authManager *auth.Manager, repositories 
 		http.MethodPatch:  requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))),
 		http.MethodDelete: requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))),
 		http.MethodPut:    requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminWorkstations.handleWorkstation))),
+	}})
+	mux.Handle("/api/v1/admin/po-lines", methodRouter{handlers: map[string]http.Handler{
+		http.MethodGet: requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminSchedules.handlePOLines)),
+	}})
+	mux.Handle("/api/v1/admin/po-lines/", methodRouter{handlers: map[string]http.Handler{
+		http.MethodGet:  requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminSchedules.handlePOLines)),
+		http.MethodPost: requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminSchedules.handlePOLines))),
+	}})
+	mux.Handle("/api/v1/admin/schedule-items", methodRouter{handlers: map[string]http.Handler{
+		http.MethodGet: requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminSchedules.handleSchedules)),
+	}})
+	mux.Handle("/api/v1/admin/schedule-items/", methodRouter{handlers: map[string]http.Handler{
+		http.MethodGet:   requireRole(string(store.RoleAdmin), authManager, http.HandlerFunc(adminSchedules.handleSchedules)),
+		http.MethodPatch: requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminSchedules.handleSchedules))),
+		http.MethodPost:  requireRole(string(store.RoleAdmin), authManager, requireCSRF(authManager, http.HandlerFunc(adminSchedules.handleSchedules))),
 	}})
 
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join("web", "static")))))

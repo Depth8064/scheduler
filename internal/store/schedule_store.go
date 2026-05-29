@@ -14,6 +14,8 @@ var (
 	ErrInvalidTransition  = errors.New("invalid schedule transition")
 	ErrStaleVersion       = errors.New("stale schedule version")
 	ErrWorkstationInvalid = errors.New("invalid workstation")
+	ErrQueueVersion       = errors.New("queue version conflict")
+	ErrInvalidQueue       = errors.New("invalid queue reorder payload")
 )
 
 type ScheduleListFilter struct {
@@ -392,6 +394,117 @@ func (s *ScheduleStore) UpdateMetadata(ctx context.Context, id string, expectedV
 	}
 
 	return s.GetByID(ctx, id)
+}
+
+func (s *ScheduleStore) QueueVersion(ctx context.Context, workstationID string) (int64, error) {
+	if workstationID == "" {
+		return 0, ErrInvalidQueue
+	}
+
+	var version int64
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version), 0)
+		FROM schedule_items
+		WHERE workstation_id = $1 AND status = 'queued'
+	`, workstationID).Scan(&version); err != nil {
+		return 0, fmt.Errorf("queue version for workstation %s: %w", workstationID, err)
+	}
+
+	return version, nil
+}
+
+func (s *ScheduleStore) ReorderQueue(ctx context.Context, workstationID string, expectedVersion int64, orderedItemIDs []string) error {
+	if workstationID == "" || len(orderedItemIDs) == 0 {
+		return ErrInvalidQueue
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin queue reorder: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err = s.validateWorkstationTx(ctx, tx, workstationID); err != nil {
+		return err
+	}
+
+	var currentVersion int64
+	if err = tx.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version), 0)
+		FROM schedule_items
+		WHERE workstation_id = $1 AND status = 'queued'
+	`, workstationID).Scan(&currentVersion); err != nil {
+		return fmt.Errorf("read current queue version: %w", err)
+	}
+	if expectedVersion > 0 && currentVersion != expectedVersion {
+		return ErrQueueVersion
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id
+		FROM schedule_items
+		WHERE workstation_id = $1 AND status = 'queued'
+	`, workstationID)
+	if err != nil {
+		return fmt.Errorf("load queued items for reorder: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			return fmt.Errorf("scan queued item id: %w", scanErr)
+		}
+		existing[id] = struct{}{}
+	}
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("iterate queued items: %w", err)
+	}
+
+	if len(existing) != len(orderedItemIDs) {
+		return ErrInvalidQueue
+	}
+
+	seen := make(map[string]struct{}, len(orderedItemIDs))
+	for _, id := range orderedItemIDs {
+		if _, ok := existing[id]; !ok {
+			return ErrInvalidQueue
+		}
+		if _, dup := seen[id]; dup {
+			return ErrInvalidQueue
+		}
+		seen[id] = struct{}{}
+	}
+
+	for idx, id := range orderedItemIDs {
+		result, execErr := tx.ExecContext(ctx, `
+			UPDATE schedule_items
+			SET sort_order = $3, version = version + 1, updated_at = NOW()
+			WHERE id = $1 AND workstation_id = $2 AND status = 'queued'
+		`, id, workstationID, idx+1)
+		if execErr != nil {
+			return fmt.Errorf("update queue order for %s: %w", id, execErr)
+		}
+
+		affected, rowsErr := result.RowsAffected()
+		if rowsErr != nil {
+			return fmt.Errorf("inspect queue update rows for %s: %w", id, rowsErr)
+		}
+		if affected == 0 {
+			return ErrInvalidQueue
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit queue reorder: %w", err)
+	}
+
+	return nil
 }
 
 func (s *ScheduleStore) getPOLineTx(ctx context.Context, tx *sql.Tx, id string) (*POLine, error) {

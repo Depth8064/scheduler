@@ -32,7 +32,27 @@
 
 <section class="panel">
   <h2>Schedule setup</h2>
+  <div class="form-row" style="margin-bottom:12px;">
+    <div>
+      <label for="bulk-assign-workstation">Bulk assign workstation</label>
+      <select id="bulk-assign-workstation"></select>
+    </div>
+    <button id="btn-bulk-assign" type="button">Bulk assign selected</button>
+  </div>
   <div id="schedule-items-list"></div>
   <div id="schedule-action-status" class="notice" style="display:none;"></div>
+</section>
+
+<section class="panel">
+  <h2>Queue reorder</h2>
+  <div class="form-row">
+    <div>
+      <label for="queue-workstation-select">Workstation queue</label>
+      <select id="queue-workstation-select"></select>
+    </div>
+    <button id="btn-load-queue" type="button">Load queue</button>
+    <button id="btn-save-queue-order" type="button">Save queue order</button>
+  </div>
+  <div id="queue-reorder-list" style="margin-top:12px;"></div>
 </section>
 {{ end }}

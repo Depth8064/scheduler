@@ -616,6 +616,29 @@ function bindWorkstationsPage() {
 }
 
 let adminWorkstationsCache = [];
+const selectedBulkItemIds = new Set();
+let queueReorderState = {
+  workstationId: '',
+  queueVersion: 0,
+  items: [],
+};
+
+function populateWorkstationSelect(selectElement, placeholderText) {
+  if (!selectElement) return;
+
+  selectElement.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = placeholderText;
+  selectElement.appendChild(placeholder);
+
+  adminWorkstationsCache.forEach(workstation => {
+    const option = document.createElement('option');
+    option.value = workstation.id;
+    option.textContent = `${workstation.station_type} - ${workstation.name}`;
+    selectElement.appendChild(option);
+  });
+}
 
 function setAdminStatus(message, tone = 'info') {
   const status = document.getElementById('schedule-action-status');
@@ -654,6 +677,8 @@ function setPOImportStatus(message, tone = 'info') {
 async function loadAdminWorkstationsCache() {
   const workstations = await apiGet('/api/v1/admin/workstations');
   adminWorkstationsCache = (workstations || []).filter(workstation => workstation.active);
+  populateWorkstationSelect(document.getElementById('bulk-assign-workstation'), 'Choose workstation for bulk assign');
+  populateWorkstationSelect(document.getElementById('queue-workstation-select'), 'Choose workstation queue');
 }
 
 function buildWorkstationSelect(defaultValue = '') {
@@ -785,6 +810,13 @@ function renderScheduleItems(items) {
   const target = document.getElementById('schedule-items-list');
   if (!target) return;
 
+  const currentIDs = new Set((items || []).map(item => item.id));
+  Array.from(selectedBulkItemIds).forEach(id => {
+    if (!currentIDs.has(id)) {
+      selectedBulkItemIds.delete(id);
+    }
+  });
+
   if (!items || items.length === 0) {
     target.innerHTML = '<p class="notice">No schedule items yet. Promote a PO line from the inbox.</p>';
     return;
@@ -797,6 +829,27 @@ function renderScheduleItems(items) {
     const li = document.createElement('li');
     li.style.flexDirection = 'column';
     li.style.alignItems = 'stretch';
+
+    if (item.status === 'unreleased' || item.status === 'released') {
+      const selectRow = document.createElement('label');
+      selectRow.className = 'meta-row';
+      const selectInput = document.createElement('input');
+      selectInput.type = 'checkbox';
+      selectInput.style.width = 'auto';
+      selectInput.checked = selectedBulkItemIds.has(item.id);
+      selectInput.addEventListener('change', () => {
+        if (selectInput.checked) {
+          selectedBulkItemIds.add(item.id);
+        } else {
+          selectedBulkItemIds.delete(item.id);
+        }
+      });
+      const text = document.createElement('span');
+      text.textContent = 'Select for bulk assign';
+      selectRow.appendChild(selectInput);
+      selectRow.appendChild(text);
+      li.appendChild(selectRow);
+    }
 
     const heading = document.createElement('div');
     heading.innerHTML = `<strong>${item.part_number}</strong> <span>${item.external_job_number || 'manual item'}</span>`;
@@ -955,10 +1008,168 @@ async function handlePOImport(event) {
   }
 }
 
+async function handleBulkAssign() {
+  const workstationSelect = document.getElementById('bulk-assign-workstation');
+  const workstationID = workstationSelect ? workstationSelect.value : '';
+  const itemIDs = Array.from(selectedBulkItemIds);
+
+  if (!workstationID) {
+    setAdminStatus('Select a workstation for bulk assign.', 'error');
+    return;
+  }
+  if (itemIDs.length === 0) {
+    setAdminStatus('Select at least one unreleased or released item first.', 'error');
+    return;
+  }
+
+  setAdminStatus(`Assigning ${itemIDs.length} items...`);
+  try {
+    const result = await apiPost('/api/v1/admin/schedule-items/bulk-assign', {
+      workstation_id: workstationID,
+      item_ids: itemIDs,
+    });
+
+    const assigned = result.assigned || 0;
+    const requested = result.requested || itemIDs.length;
+    if (assigned === requested) {
+      setAdminStatus(`Bulk assign complete: ${assigned}/${requested} items assigned.`, 'success');
+    } else {
+      setAdminStatus(`Bulk assign partial: ${assigned}/${requested} items assigned.`, 'error');
+    }
+
+    selectedBulkItemIds.clear();
+    await loadScheduleItems();
+  } catch (err) {
+    setAdminStatus(err.body || err.message || 'Bulk assign failed.', 'error');
+  }
+}
+
+function renderQueueReorderList() {
+  const target = document.getElementById('queue-reorder-list');
+  if (!target) return;
+
+  if (!queueReorderState.workstationId) {
+    target.innerHTML = '<p class="notice">Choose a workstation and load queue.</p>';
+    return;
+  }
+
+  if (!queueReorderState.items.length) {
+    target.innerHTML = '<p class="notice">No queued items for this workstation.</p>';
+    return;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'endpoint-list';
+
+  queueReorderState.items.forEach((item, index) => {
+    const li = document.createElement('li');
+    li.style.flexDirection = 'column';
+    li.style.alignItems = 'stretch';
+
+    const title = document.createElement('div');
+    title.innerHTML = `<strong>${index + 1}. ${item.part_number}</strong> <span>${item.external_job_number || item.id}</span>`;
+
+    const actions = document.createElement('div');
+    actions.className = 'meta-row';
+
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.textContent = 'Move up';
+    up.disabled = index === 0;
+    up.addEventListener('click', () => {
+      if (index === 0) return;
+      const next = [...queueReorderState.items];
+      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      queueReorderState.items = next;
+      renderQueueReorderList();
+    });
+
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.textContent = 'Move down';
+    down.disabled = index === queueReorderState.items.length - 1;
+    down.addEventListener('click', () => {
+      if (index >= queueReorderState.items.length - 1) return;
+      const next = [...queueReorderState.items];
+      [next[index + 1], next[index]] = [next[index], next[index + 1]];
+      queueReorderState.items = next;
+      renderQueueReorderList();
+    });
+
+    actions.appendChild(up);
+    actions.appendChild(down);
+
+    li.appendChild(title);
+    li.appendChild(actions);
+    list.appendChild(li);
+  });
+
+  target.innerHTML = '';
+  target.appendChild(list);
+}
+
+async function loadQueueForSelectedWorkstation() {
+  const select = document.getElementById('queue-workstation-select');
+  const workstationID = select ? select.value : '';
+  if (!workstationID) {
+    setAdminStatus('Select a workstation queue to load.', 'error');
+    return;
+  }
+
+  setAdminStatus('Loading queue...');
+  try {
+    const [versionPayload, queueItems] = await Promise.all([
+      apiGet(`/api/v1/admin/schedule-items/queue-version?workstation_id=${encodeURIComponent(workstationID)}`),
+      apiGet(`/api/v1/admin/schedule-items?status=queued&workstation_id=${encodeURIComponent(workstationID)}&limit=200`),
+    ]);
+
+    queueReorderState = {
+      workstationId: workstationID,
+      queueVersion: versionPayload.queue_version || 0,
+      items: queueItems || [],
+    };
+
+    renderQueueReorderList();
+    setAdminStatus('Queue loaded. Reorder and save when ready.', 'success');
+  } catch (err) {
+    setAdminStatus(err.body || err.message || 'Failed to load workstation queue.', 'error');
+  }
+}
+
+async function saveQueueOrder() {
+  if (!queueReorderState.workstationId) {
+    setAdminStatus('Load a workstation queue first.', 'error');
+    return;
+  }
+  if (!queueReorderState.items.length) {
+    setAdminStatus('No queued items to reorder.', 'error');
+    return;
+  }
+
+  const payload = {
+    workstation_id: queueReorderState.workstationId,
+    queue_version: queueReorderState.queueVersion,
+    item_ids: queueReorderState.items.map(item => item.id),
+  };
+
+  setAdminStatus('Saving queue order...');
+  try {
+    const result = await apiPost('/api/v1/admin/schedule-items/reorder', payload);
+    queueReorderState.queueVersion = result.queue_version || queueReorderState.queueVersion;
+    setAdminStatus('Queue order saved.', 'success');
+    await loadScheduleItems();
+  } catch (err) {
+    setAdminStatus(err.body || err.message || 'Failed to save queue order.', 'error');
+  }
+}
+
 function bindAdminPageButtons() {
   const loadPOInboxBtn = document.getElementById('btn-load-po-inbox');
   const loadScheduleItemsBtn = document.getElementById('btn-load-schedule-items');
   const importForm = document.getElementById('po-import-form');
+  const bulkAssignButton = document.getElementById('btn-bulk-assign');
+  const loadQueueButton = document.getElementById('btn-load-queue');
+  const saveQueueOrderButton = document.getElementById('btn-save-queue-order');
 
   if (loadPOInboxBtn) {
     loadPOInboxBtn.addEventListener('click', loadPOInbox);
@@ -968,6 +1179,15 @@ function bindAdminPageButtons() {
   }
   if (importForm) {
     importForm.addEventListener('submit', handlePOImport);
+  }
+  if (bulkAssignButton) {
+    bulkAssignButton.addEventListener('click', handleBulkAssign);
+  }
+  if (loadQueueButton) {
+    loadQueueButton.addEventListener('click', loadQueueForSelectedWorkstation);
+  }
+  if (saveQueueOrderButton) {
+    saveQueueOrderButton.addEventListener('click', saveQueueOrder);
   }
 }
 
@@ -1073,6 +1293,7 @@ async function initProtectedPage() {
 
   if (page === 'admin') {
     bindAdminPageButtons();
+    renderQueueReorderList();
     try {
       await loadAdminWorkstationsCache();
       await Promise.all([loadPOInbox(), loadScheduleItems()]);

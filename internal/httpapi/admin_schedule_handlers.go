@@ -73,6 +73,32 @@ func (h *adminSchedulesHandler) handleSchedules(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	if !strings.Contains(suffix, "/") {
+		switch suffix {
+		case "bulk-assign":
+			if r.Method != http.MethodPost {
+				methodNotAllowed(w)
+				return
+			}
+			h.handleBulkAssign(w, r)
+			return
+		case "reorder":
+			if r.Method != http.MethodPost {
+				methodNotAllowed(w)
+				return
+			}
+			h.handleReorder(w, r)
+			return
+		case "queue-version":
+			if r.Method != http.MethodGet {
+				methodNotAllowed(w)
+				return
+			}
+			h.handleQueueVersion(w, r)
+			return
+		}
+	}
+
 	if strings.Contains(suffix, "/") {
 		parts := strings.Split(suffix, "/")
 		if len(parts) != 2 {
@@ -117,6 +143,137 @@ func (h *adminSchedulesHandler) handleSchedules(w http.ResponseWriter, r *http.R
 	default:
 		methodNotAllowed(w)
 	}
+}
+
+func (h *adminSchedulesHandler) handleQueueVersion(w http.ResponseWriter, r *http.Request) {
+	workstationID := strings.TrimSpace(r.URL.Query().Get("workstation_id"))
+	if workstationID == "" {
+		jsonError(w, http.StatusBadRequest, "workstation_id is required")
+		return
+	}
+
+	version, err := h.schedules.QueueVersion(r.Context(), workstationID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to get queue version")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"workstation_id": workstationID,
+		"queue_version":  version,
+	})
+}
+
+func (h *adminSchedulesHandler) handleBulkAssign(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		WorkstationID string   `json:"workstation_id"`
+		ItemIDs       []string `json:"item_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	req.WorkstationID = strings.TrimSpace(req.WorkstationID)
+	if req.WorkstationID == "" {
+		jsonError(w, http.StatusBadRequest, "workstation_id is required")
+		return
+	}
+	if len(req.ItemIDs) == 0 {
+		jsonError(w, http.StatusBadRequest, "item_ids is required")
+		return
+	}
+
+	type assignResult struct {
+		ItemID string `json:"item_id"`
+		Status string `json:"status"`
+		Error  string `json:"error,omitempty"`
+	}
+
+	results := make([]assignResult, 0, len(req.ItemIDs))
+	successCount := 0
+	for _, itemID := range req.ItemIDs {
+		trimmed := strings.TrimSpace(itemID)
+		if trimmed == "" {
+			continue
+		}
+
+		_, err := h.schedules.Assign(r.Context(), trimmed, req.WorkstationID)
+		if err != nil {
+			message := "failed to assign"
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				message = "item not found"
+			case errors.Is(err, store.ErrInvalidTransition):
+				message = "item is not assignable"
+			case errors.Is(err, store.ErrWorkstationInvalid):
+				message = "workstation is invalid or inactive"
+			}
+			results = append(results, assignResult{ItemID: trimmed, Status: "failed", Error: message})
+			continue
+		}
+
+		successCount++
+		results = append(results, assignResult{ItemID: trimmed, Status: "assigned"})
+	}
+
+	statusCode := http.StatusOK
+	if successCount == 0 {
+		statusCode = http.StatusUnprocessableEntity
+	}
+
+	jsonResponse(w, statusCode, map[string]any{
+		"workstation_id": req.WorkstationID,
+		"requested":      len(req.ItemIDs),
+		"assigned":       successCount,
+		"results":        results,
+	})
+}
+
+func (h *adminSchedulesHandler) handleReorder(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		WorkstationID string   `json:"workstation_id"`
+		QueueVersion  int64    `json:"queue_version"`
+		ItemIDs       []string `json:"item_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	req.WorkstationID = strings.TrimSpace(req.WorkstationID)
+	if req.WorkstationID == "" {
+		jsonError(w, http.StatusBadRequest, "workstation_id is required")
+		return
+	}
+	if len(req.ItemIDs) == 0 {
+		jsonError(w, http.StatusBadRequest, "item_ids is required")
+		return
+	}
+
+	if err := h.schedules.ReorderQueue(r.Context(), req.WorkstationID, req.QueueVersion, req.ItemIDs); err != nil {
+		switch {
+		case errors.Is(err, store.ErrQueueVersion):
+			jsonError(w, http.StatusConflict, "queue version conflict")
+		case errors.Is(err, store.ErrInvalidQueue), errors.Is(err, store.ErrWorkstationInvalid):
+			jsonError(w, http.StatusUnprocessableEntity, "invalid queue reorder request")
+		default:
+			jsonError(w, http.StatusInternalServerError, "failed to reorder queue")
+		}
+		return
+	}
+
+	newVersion, versionErr := h.schedules.QueueVersion(r.Context(), req.WorkstationID)
+	if versionErr != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to get reordered queue version")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]any{
+		"workstation_id": req.WorkstationID,
+		"queue_version":  newVersion,
+		"updated":        true,
+	})
 }
 
 func (h *adminSchedulesHandler) handleInbox(w http.ResponseWriter, r *http.Request) {

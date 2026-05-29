@@ -8,8 +8,13 @@ services:
     env_file:
       - .env.example
     environment:
-      # Local override for compose-managed PostgreSQL
-      SCHEDULER_DATABASE_URL: postgres://scheduler:scheduler@db:5432/scheduler?sslmode=disable
+      # Compose-managed PostgreSQL connection pieces (avoids DSN escaping issues)
+      SCHEDULER_DB_USER: scheduler
+      SCHEDULER_DB_PASSWORD: scheduler
+      SCHEDULER_DB_HOST: db
+      SCHEDULER_DB_PORT: 5432
+      SCHEDULER_DB_NAME: scheduler
+      SCHEDULER_DB_SSLMODE: disable
     ports:
       - '8080:8080'
     restart: unless-stopped

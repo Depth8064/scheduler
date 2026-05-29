@@ -10,5 +10,6 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o /scheduler ./cmd/sched
 
 FROM gcr.io/distroless/static-debian11
 COPY --from=builder /scheduler /scheduler
+COPY --from=builder /src/web /web
 EXPOSE 8080
 ENTRYPOINT ["/scheduler"]

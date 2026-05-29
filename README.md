@@ -15,6 +15,30 @@ docker compose -f docker-compose.example.yml up --build
 
 The compose example runs the application and a local PostgreSQL container. The application reads settings from `.env.example` and overrides the database URL with the compose-managed DB.
 
+## Container health checks
+
+The scheduler binary supports a built-in health check mode that does not require `curl` inside the image:
+
+```bash
+/scheduler --healthcheck
+```
+
+It performs an HTTP GET against the service's own `/healthz` endpoint using the configured listen address and exits with:
+
+- `0` when healthy
+- `1` when unhealthy
+
+Compose example:
+
+```yaml
+healthcheck:
+	test: ['CMD', '/scheduler', '--healthcheck']
+	interval: 10s
+	timeout: 5s
+	retries: 5
+	start_period: 20s
+```
+
 ## CI/CD
 
 GitHub Actions is configured in `.github/workflows/ci.yml`.

@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +26,19 @@ import (
 )
 
 func main() {
+	healthcheck := flag.Bool("healthcheck", false, "run a one-shot healthcheck and exit")
+	healthcheckTimeout := flag.Duration("healthcheck-timeout", 5*time.Second, "timeout for healthcheck request")
+	flag.Parse()
+
+	if *healthcheck {
+		if err := runHealthcheck(*healthcheckTimeout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("ok")
+		return
+	}
+
 	fmt.Println("Loading configuration...")
 	cfg, err := config.FromEnv()
 	if err != nil {
@@ -115,6 +130,51 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logManager.Error("graceful shutdown failed", "error", err)
 	}
+}
+
+func runHealthcheck(timeout time.Duration) error {
+	cfg, err := config.FromEnv()
+	if err != nil {
+		return fmt.Errorf("load configuration: %w", err)
+	}
+
+	url, err := healthcheckURL(cfg.ListenAddr)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("create healthcheck request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("execute healthcheck request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck failed: %s", resp.Status)
+	}
+
+	return nil
+}
+
+func healthcheckURL(listenAddr string) (string, error) {
+	host, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return "", fmt.Errorf("invalid listen address %q: %w", listenAddr, err)
+	}
+
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		host = "127.0.0.1"
+	}
+
+	return fmt.Sprintf("http://%s/healthz", net.JoinHostPort(host, port)), nil
 }
 
 func ensureDefaultAdmin(ctx context.Context, users *store.UserStore, logger *logging.Manager) error {
